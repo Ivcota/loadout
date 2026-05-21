@@ -7,6 +7,13 @@ import { loadoutHome } from "../paths.js";
 import { VERSION } from "../index.js";
 import { init } from "./commands/init.js";
 import { list, renderList } from "./commands/list.js";
+import {
+  addSkill,
+  deleteMode,
+  newMode,
+  renderManifestEdit,
+  rmSkill,
+} from "./commands/manifest.js";
 import { renderStatus, status } from "./commands/status.js";
 import { off, on, renderSwap, use } from "./commands/swap.js";
 import type { SwapInput } from "./commands/swap.js";
@@ -25,6 +32,22 @@ const describeError = (err: unknown): string => {
     }
     if (e["_tag"] === "SwapNothingToRollback") {
       return `--rollback used but no operation is in progress`;
+    }
+    if (e["_tag"] === "ManifestModeAlreadyExists") {
+      return `mode '${e["mode"]}' already exists in modes.yaml`;
+    }
+    if (e["_tag"] === "ManifestModeNotFound") {
+      const known = (e["knownModes"] as string[] | undefined) ?? [];
+      return `unknown mode '${e["mode"]}'. known modes: ${known.length === 0 ? "(none)" : known.join(", ")}`;
+    }
+    if (e["_tag"] === "ManifestModeInUse") {
+      return `mode '${e["mode"]}' is currently active. run \`loadout off ${e["mode"]}\` first, then delete`;
+    }
+    if (e["_tag"] === "ManifestSkillNotKnown") {
+      return `skill '${e["skill"]}' not found in any harness pool or active dir`;
+    }
+    if (e["_tag"] === "ManifestSkillNotInMode") {
+      return `skill '${e["skill"]}' is not in mode '${e["mode"]}'`;
     }
     if (typeof e["message"] === "string") return e["message"];
     if (typeof e["_tag"] === "string") {
@@ -53,7 +76,7 @@ const failWith = (label: string) =>
 const root = Command.make("loadout", {}, () =>
   Console.log(
     `loadout v${VERSION} — swap groups of AI skills in/out of your harness.\n` +
-      `\nv1 commands: init, status, list, on, off, use  (edit/add/rm/new/delete/uninstall/doctor pending)\n`,
+      `\nv1 commands: init, status, list, on, off, use, new, delete, add, rm  (edit/uninstall/doctor pending)\n`,
   ),
 );
 
@@ -137,6 +160,61 @@ const listCmd = Command.make("list", {}, () =>
   }).pipe(failWith("loadout list")),
 );
 
+const newCmd = Command.make(
+  "new",
+  { mode: Args.text({ name: "mode" }) },
+  ({ mode }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* newMode({ paths, mode });
+      yield* Console.log(renderManifestEdit(report));
+    }).pipe(failWith("loadout new")),
+);
+
+const deleteCmd = Command.make(
+  "delete",
+  { mode: Args.text({ name: "mode" }) },
+  ({ mode }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* deleteMode({ paths, mode });
+      yield* Console.log(renderManifestEdit(report));
+    }).pipe(failWith("loadout delete")),
+);
+
+const addCmd = Command.make(
+  "add",
+  {
+    mode: Args.text({ name: "mode" }),
+    skill: Args.text({ name: "skill" }),
+  },
+  ({ mode, skill }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* addSkill({
+        paths,
+        adapters: allAdapters(),
+        mode,
+        skill,
+      });
+      yield* Console.log(renderManifestEdit(report));
+    }).pipe(failWith("loadout add")),
+);
+
+const rmCmd = Command.make(
+  "rm",
+  {
+    mode: Args.text({ name: "mode" }),
+    skill: Args.text({ name: "skill" }),
+  },
+  ({ mode, skill }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* rmSkill({ paths, mode, skill });
+      yield* Console.log(renderManifestEdit(report));
+    }).pipe(failWith("loadout rm")),
+);
+
 const cli = Command.run(
   root.pipe(
     Command.withSubcommands([
@@ -146,6 +224,10 @@ const cli = Command.run(
       onCmd,
       offCmd,
       useCmd,
+      newCmd,
+      deleteCmd,
+      addCmd,
+      rmCmd,
     ]),
   ),
   {
