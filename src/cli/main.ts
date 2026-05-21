@@ -6,19 +6,29 @@ import { createCodexAdapter } from "../adapters/codex/index.js";
 import { loadoutHome } from "../paths.js";
 import { VERSION } from "../index.js";
 import { init } from "./commands/init.js";
+import { list, renderList } from "./commands/list.js";
+import { renderStatus, status } from "./commands/status.js";
+
+const allAdapters = () => [createClaudeAdapter(), createCodexAdapter()];
+
+const failWith = (label: string) =>
+  Effect.catchAll((err: unknown) =>
+    Console.error(`${label} failed: ${String(err)}`).pipe(
+      Effect.zipRight(Effect.sync(() => process.exit(1))),
+    ),
+  );
 
 const root = Command.make("loadout", {}, () =>
   Console.log(
     `loadout v${VERSION} — swap groups of AI skills in/out of your harness.\n` +
-      `\nv1 commands (init implemented; on/off/use/status/list/edit/add/rm/new/delete/uninstall/doctor pending)\n`,
+      `\nv1 commands: init, status, list  (on/off/use/edit/add/rm/new/delete/uninstall/doctor pending)\n`,
   ),
 );
 
 const initCmd = Command.make("init", {}, () =>
   Effect.gen(function* () {
     const paths = loadoutHome();
-    const adapters = [createClaudeAdapter(), createCodexAdapter()];
-    const report = yield* init({ paths, adapters });
+    const report = yield* init({ paths, adapters: allAdapters() });
 
     const lines: string[] = [];
     lines.push(`loadout init — root: ${paths.root}`);
@@ -37,19 +47,32 @@ const initCmd = Command.make("init", {}, () =>
     );
     lines.push(`  no files moved.`);
     yield* Console.log(lines.join("\n"));
-  }).pipe(
-    Effect.catchAll((err) =>
-      Console.error(`loadout init failed: ${String(err)}`).pipe(
-        Effect.zipRight(Effect.sync(() => process.exit(1))),
-      ),
-    ),
-  ),
+  }).pipe(failWith("loadout init")),
 );
 
-const cli = Command.run(root.pipe(Command.withSubcommands([initCmd])), {
-  name: "loadout",
-  version: VERSION,
-});
+const statusCmd = Command.make("status", {}, () =>
+  Effect.gen(function* () {
+    const paths = loadoutHome();
+    const report = yield* status({ paths, adapters: allAdapters() });
+    yield* Console.log(renderStatus(report));
+  }).pipe(failWith("loadout status")),
+);
+
+const listCmd = Command.make("list", {}, () =>
+  Effect.gen(function* () {
+    const paths = loadoutHome();
+    const report = yield* list({ paths });
+    yield* Console.log(renderList(report));
+  }).pipe(failWith("loadout list")),
+);
+
+const cli = Command.run(
+  root.pipe(Command.withSubcommands([initCmd, statusCmd, listCmd])),
+  {
+    name: "loadout",
+    version: VERSION,
+  },
+);
 
 cli(process.argv).pipe(
   Effect.provide(NodeContext.layer),
