@@ -1,4 +1,4 @@
-import { Command } from "@effect/cli";
+import { Args, Command, Options } from "@effect/cli";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Console, Effect } from "effect";
 import { createClaudeAdapter } from "../adapters/claude/index.js";
@@ -8,12 +8,44 @@ import { VERSION } from "../index.js";
 import { init } from "./commands/init.js";
 import { list, renderList } from "./commands/list.js";
 import { renderStatus, status } from "./commands/status.js";
+import { off, on, renderSwap, use } from "./commands/swap.js";
+import type { SwapInput } from "./commands/swap.js";
 
 const allAdapters = () => [createClaudeAdapter(), createCodexAdapter()];
 
+const describeError = (err: unknown): string => {
+  if (err === null || err === undefined) return String(err);
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message || err.toString();
+  if (typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    if (e["_tag"] === "SwapModeNotFound") {
+      const known = (e["knownModes"] as string[] | undefined) ?? [];
+      return `unknown mode '${e["mode"]}'. known modes: ${known.length === 0 ? "(none)" : known.join(", ")}`;
+    }
+    if (e["_tag"] === "SwapNothingToRollback") {
+      return `--rollback used but no operation is in progress`;
+    }
+    if (typeof e["message"] === "string") return e["message"];
+    if (typeof e["_tag"] === "string") {
+      try {
+        return `${e["_tag"]}: ${JSON.stringify(err)}`;
+      } catch {
+        return String(e["_tag"]);
+      }
+    }
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
+};
+
 const failWith = (label: string) =>
   Effect.catchAll((err: unknown) =>
-    Console.error(`${label} failed: ${String(err)}`).pipe(
+    Console.error(`${label} failed: ${describeError(err)}`).pipe(
       Effect.zipRight(Effect.sync(() => process.exit(1))),
     ),
   );
@@ -21,9 +53,48 @@ const failWith = (label: string) =>
 const root = Command.make("loadout", {}, () =>
   Console.log(
     `loadout v${VERSION} — swap groups of AI skills in/out of your harness.\n` +
-      `\nv1 commands: init, status, list  (on/off/use/edit/add/rm/new/delete/uninstall/doctor pending)\n`,
+      `\nv1 commands: init, status, list, on, off, use  (edit/add/rm/new/delete/uninstall/doctor pending)\n`,
   ),
 );
+
+const modeArg = Args.text({ name: "mode" });
+const dryRunOpt = Options.boolean("dry-run");
+const rollbackOpt = Options.boolean("rollback");
+
+const swapConfig = {
+  mode: modeArg,
+  dryRun: dryRunOpt,
+  rollback: rollbackOpt,
+};
+
+type SwapHandler = (
+  input: Omit<SwapInput, "op">,
+) => ReturnType<typeof on>;
+
+const swapCmd = (
+  name: "on" | "off" | "use",
+  handler: SwapHandler,
+) =>
+  Command.make(
+    name,
+    swapConfig,
+    ({ mode, dryRun, rollback }) =>
+      Effect.gen(function* () {
+        const paths = loadoutHome();
+        const report = yield* handler({
+          paths,
+          adapters: allAdapters(),
+          mode,
+          dryRun,
+          rollback,
+        });
+        yield* Console.log(renderSwap(report));
+      }).pipe(failWith(`loadout ${name}`)),
+  );
+
+const onCmd = swapCmd("on", on);
+const offCmd = swapCmd("off", off);
+const useCmd = swapCmd("use", use);
 
 const initCmd = Command.make("init", {}, () =>
   Effect.gen(function* () {
@@ -67,7 +138,16 @@ const listCmd = Command.make("list", {}, () =>
 );
 
 const cli = Command.run(
-  root.pipe(Command.withSubcommands([initCmd, statusCmd, listCmd])),
+  root.pipe(
+    Command.withSubcommands([
+      initCmd,
+      statusCmd,
+      listCmd,
+      onCmd,
+      offCmd,
+      useCmd,
+    ]),
+  ),
   {
     name: "loadout",
     version: VERSION,
