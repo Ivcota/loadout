@@ -5,6 +5,7 @@ import { createClaudeAdapter } from "../adapters/claude/index.js";
 import { createCodexAdapter } from "../adapters/codex/index.js";
 import { loadoutHome } from "../paths.js";
 import { VERSION } from "../index.js";
+import { doctor, renderDoctor } from "./commands/doctor.js";
 import { init } from "./commands/init.js";
 import { list, renderList } from "./commands/list.js";
 import {
@@ -68,15 +69,16 @@ const describeError = (err: unknown): string => {
 
 const failWith = (label: string) =>
   Effect.catchAll((err: unknown) =>
-    Console.error(`${label} failed: ${describeError(err)}`).pipe(
-      Effect.zipRight(Effect.sync(() => process.exit(1))),
-    ),
+    Effect.sync(() => {
+      process.stderr.write(`${label} failed: ${describeError(err)}\n`);
+      process.exit(1);
+    }),
   );
 
 const root = Command.make("loadout", {}, () =>
   Console.log(
     `loadout v${VERSION} — swap groups of AI skills in/out of your harness.\n` +
-      `\nv1 commands: init, status, list, on, off, use, new, delete, add, rm  (edit/uninstall/doctor pending)\n`,
+      `\nv1 commands: init, status, list, on, off, use, new, delete, add, rm, doctor  (edit/uninstall pending)\n`,
   ),
 );
 
@@ -215,6 +217,19 @@ const rmCmd = Command.make(
     }).pipe(failWith("loadout rm")),
 );
 
+const doctorCmd = Command.make("doctor", {}, () =>
+  Effect.gen(function* () {
+    const paths = loadoutHome();
+    const report = yield* doctor({ paths, adapters: allAdapters() });
+    yield* Console.log(renderDoctor(report));
+    if (report.issues.length > 0) {
+      // Exit code = issue count, clamped to [1, 125] to stay in shell-safe range.
+      const code = Math.min(report.issues.length, 125);
+      yield* Effect.sync(() => process.exit(code));
+    }
+  }).pipe(failWith("loadout doctor")),
+);
+
 const cli = Command.run(
   root.pipe(
     Command.withSubcommands([
@@ -228,6 +243,7 @@ const cli = Command.run(
       deleteCmd,
       addCmd,
       rmCmd,
+      doctorCmd,
     ]),
   ),
   {
