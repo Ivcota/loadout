@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { Effect } from "effect";
 import * as lockfile from "proper-lockfile";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createAgentsAdapter } from "../../adapters/agents/index.js";
 import { createClaudeAdapter } from "../../adapters/claude/index.js";
 import { createCodexAdapter } from "../../adapters/codex/index.js";
 import { save as saveManifest } from "../../manifest/loader.js";
@@ -26,12 +27,12 @@ const run = <A, E>(eff: Effect.Effect<A, E>): Promise<A> => Effect.runPromise(ef
 
 const seedActive = async (
   homeRoot: string,
-  harness: "claude" | "codex",
+  harness: "claude" | "codex" | "agents",
   skills: string[],
 ): Promise<void> => {
   const dir = path.join(
     homeRoot,
-    harness === "claude" ? ".claude" : ".agents",
+    harness === "claude" ? ".claude" : harness === "codex" ? ".codex" : ".agents",
     "skills",
   );
   for (const s of skills) {
@@ -41,7 +42,7 @@ const seedActive = async (
 
 const seedPool = async (
   homeRoot: string,
-  harness: "claude" | "codex",
+  harness: "claude" | "codex" | "agents",
   skills: string[],
 ): Promise<void> => {
   const dir = path.join(homeRoot, ".loadout/pool", harness);
@@ -55,6 +56,7 @@ const mkDeps = () => {
   const adapters = [
     createClaudeAdapter({ home: tmpHome }),
     createCodexAdapter({ home: tmpHome }),
+    createAgentsAdapter({ home: tmpHome }),
   ];
   return { paths, adapters };
 };

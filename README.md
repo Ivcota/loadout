@@ -15,8 +15,10 @@ You've collected a lot of AI skills. `~/.claude/skills/` is full. Codex too. Pas
 `loadout` fixes this without deleting anything. Every skill stays installed. Only the *active set* is visible to the harness; the rest sits in a **pool** ready to swap in.
 
 ```
-~/.claude/skills/           ← active set: what the harness sees
-~/.loadout/pool/claude/     ← pool: installed but hidden
+~/.claude/skills/           ← Claude active set
+~/.codex/skills/            ← Codex active set
+~/.agents/skills/           ← shared agents active set
+~/.loadout/pool/<harness>/  ← pool: installed but hidden
 ~/.loadout/modes.yaml       ← named subsets ("product", "design", ...)
 ~/.loadout/state.json       ← which modes are active right now
 ```
@@ -28,7 +30,7 @@ A *mode* is a named subset of skills. Activating a mode moves its skills from po
 - **You keep every skill.** Nothing is deleted; everything is reversible.
 - **Crash-safe.** Atomic moves, lockfile, resume-on-interrupt. `Ctrl-C` mid-swap is fine.
 - **One escape hatch.** `loadout restore-all` puts everything back where the harness can see it.
-- **Multi-harness.** Claude Code and Codex out of the box; one manifest covers both.
+- **Multi-harness.** Claude Code, Codex, and shared `~/.agents/skills` harnesses out of the box; one manifest covers them all.
 
 > **Trying someone else's setup?** Want to play with a curated skill pack (gstack, a friend's dotfiles, anything) without their skills cluttering yours? Run `loadout save mine` to snapshot what you already have, install the pack, then `loadout save theirs`. Now `loadout use mine` and `loadout use theirs` flip between the two — borrow setups freely, your workflow stays intact.
 
@@ -40,7 +42,7 @@ loadout init              # scan harnesses, seed 'default' mode with everything
 loadout status            # show active modes + per-harness skill counts
 ```
 
-`init` writes `~/.loadout/modes.yaml` and `~/.loadout/state.json`. It does **not** move any files.
+`init` writes `~/.loadout/modes.yaml` and `~/.loadout/state.json`. It does **not** move any files. Codex skills are managed at `~/.codex/skills`; `~/.agents/skills` is managed separately as the shared agents harness.
 
 ## Daily workflow
 
@@ -125,7 +127,7 @@ loadout use product --rollback   # revert the in-progress op
 
 ## How it works (one paragraph)
 
-Each harness adapter owns an *active dir* (e.g. `~/.claude/skills`) and a *pool dir* (`~/.loadout/pool/claude/`). A mode is a list of skill folder names. Activating a mode plans a set of `activate` moves (pool → active) for skills not yet active; deactivating plans `deactivate` moves. Plans are written to `state.json` as an `in_progress` block before any rename, then drained one move at a time. On crash, the next command sees `in_progress` and resumes. Cross-filesystem renames fall back to copy-then-delete.
+Each harness adapter owns an *active dir* (Claude: `~/.claude/skills`, Codex: `~/.codex/skills`, shared agents: `~/.agents/skills`) and a *pool dir* (`~/.loadout/pool/<harness>/`). A mode is a list of skill folder names. Activating a mode plans a set of `activate` moves (pool → active) for skills not yet active; deactivating plans `deactivate` moves. Plans are written to `state.json` as an `in_progress` block before any rename, then drained one move at a time. On crash, the next command sees `in_progress` and resumes. Cross-filesystem renames fall back to copy-then-delete.
 
 ## Design
 

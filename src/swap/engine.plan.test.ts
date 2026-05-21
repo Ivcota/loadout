@@ -121,14 +121,19 @@ describe("SwapEngine.plan — basic ops", () => {
     const manifest = mkManifest({ product: ["qa"] });
     const claude = mkHarness("claude", [], ["qa"]);
     const codex = mkHarness("codex", [], ["qa"]);
+    const agents = mkHarness("agents", [], ["qa"]);
     const result = plan({
       op: "on",
       mode: "product",
       manifest,
       activeModes: [],
-      harnesses: [claude, codex],
+      harnesses: [claude, codex, agents],
     });
-    expect(result.moves.map((m) => m.harness).sort()).toEqual(["claude", "codex"]);
+    expect(result.moves.map((m) => m.harness).sort()).toEqual([
+      "agents",
+      "claude",
+      "codex",
+    ]);
   });
 
   it("unknown mode is a defensive no-op", () => {

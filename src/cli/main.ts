@@ -2,6 +2,7 @@ import * as readline from "node:readline";
 import { Args, Command, Options } from "@effect/cli";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Console, Effect } from "effect";
+import { createAgentsAdapter } from "../adapters/agents/index.js";
 import { createClaudeAdapter } from "../adapters/claude/index.js";
 import { createCodexAdapter } from "../adapters/codex/index.js";
 import { loadoutHome } from "../paths.js";
@@ -30,7 +31,11 @@ import { off, on, renderSwap, use } from "./commands/swap.js";
 import type { SwapInput } from "./commands/swap.js";
 import { renderUninstall, uninstall } from "./commands/uninstall.js";
 
-const allAdapters = () => [createClaudeAdapter(), createCodexAdapter()];
+const allAdapters = () => [
+  createClaudeAdapter(),
+  createCodexAdapter(),
+  createAgentsAdapter(),
+];
 
 const describeError = (err: unknown): string => {
   if (err === null || err === undefined) return String(err);

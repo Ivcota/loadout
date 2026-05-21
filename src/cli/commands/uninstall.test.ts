@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Effect, Exit } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createAgentsAdapter } from "../../adapters/agents/index.js";
 import { createClaudeAdapter } from "../../adapters/claude/index.js";
 import { createCodexAdapter } from "../../adapters/codex/index.js";
 import { save as saveManifest } from "../../manifest/loader.js";
@@ -29,12 +30,12 @@ const runExit = <A, E>(
 
 const seedActive = async (
   homeRoot: string,
-  harness: "claude" | "codex",
+  harness: "claude" | "codex" | "agents",
   skills: string[],
 ): Promise<void> => {
   const dir = path.join(
     homeRoot,
-    harness === "claude" ? ".claude" : ".agents",
+    harness === "claude" ? ".claude" : harness === "codex" ? ".codex" : ".agents",
     "skills",
   );
   for (const s of skills) {
@@ -53,6 +54,7 @@ const mkDeps = () => {
   const adapters = [
     createClaudeAdapter({ home: tmpHome }),
     createCodexAdapter({ home: tmpHome }),
+    createAgentsAdapter({ home: tmpHome }),
   ];
   return { paths, adapters };
 };
@@ -182,17 +184,24 @@ describe("uninstall", () => {
       await exists(path.join(tmpHome, ".claude/skills/loadout/SKILL.md")),
     ).toBe(true);
     expect(
+      await exists(path.join(tmpHome, ".codex/skills/loadout/SKILL.md")),
+    ).toBe(true);
+    expect(
       await exists(path.join(tmpHome, ".agents/skills/loadout/SKILL.md")),
     ).toBe(true);
 
     const report = await run(uninstall(deps));
     expect(report.removed).toBe(true);
     expect(report.reservedRemoved.map((r) => r.harness).sort()).toEqual([
+      "agents",
       "claude",
       "codex",
     ]);
     expect(
       await exists(path.join(tmpHome, ".claude/skills/loadout")),
+    ).toBe(false);
+    expect(
+      await exists(path.join(tmpHome, ".codex/skills/loadout")),
     ).toBe(false);
     expect(
       await exists(path.join(tmpHome, ".agents/skills/loadout")),

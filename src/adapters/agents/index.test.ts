@@ -4,36 +4,36 @@ import * as path from "node:path";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  CODEX_HARNESS_NAME,
-  createCodexAdapter,
-  defaultCodexActiveDir,
-  defaultCodexPoolDir,
+  AGENTS_HARNESS_NAME,
+  createAgentsAdapter,
+  defaultAgentsActiveDir,
+  defaultAgentsPoolDir,
 } from "./index.js";
 
 let tmpHome: string;
 
 beforeEach(async () => {
-  tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "loadout-codex-"));
+  tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "loadout-agents-"));
 });
 
 afterEach(async () => {
   await fs.rm(tmpHome, { recursive: true, force: true });
 });
 
-describe("CodexAdapter", () => {
-  it("defaults to ~/.codex/skills and ~/.loadout/pool/codex", () => {
+describe("AgentsAdapter", () => {
+  it("defaults to ~/.agents/skills and ~/.loadout/pool/agents", () => {
     const home = "/tmp/fake-home";
-    expect(defaultCodexActiveDir(home)).toBe("/tmp/fake-home/.codex/skills");
-    expect(defaultCodexPoolDir(home)).toBe("/tmp/fake-home/.loadout/pool/codex");
+    expect(defaultAgentsActiveDir(home)).toBe("/tmp/fake-home/.agents/skills");
+    expect(defaultAgentsPoolDir(home)).toBe("/tmp/fake-home/.loadout/pool/agents");
   });
 
-  it("uses harness name 'codex'", () => {
-    const a = createCodexAdapter({ home: tmpHome });
-    expect(a.name).toBe(CODEX_HARNESS_NAME);
+  it("uses harness name 'agents'", () => {
+    const a = createAgentsAdapter({ home: tmpHome });
+    expect(a.name).toBe(AGENTS_HARNESS_NAME);
   });
 
   it("honors explicit activeDir/poolDir overrides", () => {
-    const a = createCodexAdapter({
+    const a = createAgentsAdapter({
       activeDir: "/custom/active",
       poolDir: "/custom/pool",
     });
@@ -42,18 +42,18 @@ describe("CodexAdapter", () => {
   });
 
   it("derives paths from a custom home", () => {
-    const a = createCodexAdapter({ home: tmpHome });
-    expect(a.activeDir).toBe(path.join(tmpHome, ".codex", "skills"));
-    expect(a.poolDir).toBe(path.join(tmpHome, ".loadout", "pool", "codex"));
+    const a = createAgentsAdapter({ home: tmpHome });
+    expect(a.activeDir).toBe(path.join(tmpHome, ".agents", "skills"));
+    expect(a.poolDir).toBe(path.join(tmpHome, ".loadout", "pool", "agents"));
   });
 
   it("snapshot reads from the resolved active/pool dirs", async () => {
-    const a = createCodexAdapter({ home: tmpHome });
+    const a = createAgentsAdapter({ home: tmpHome });
     await fs.mkdir(path.join(a.poolDir, "noah-kagan"), { recursive: true });
     await fs.mkdir(path.join(a.activeDir, "scripture"), { recursive: true });
     const snap = await Effect.runPromise(a.snapshot());
     expect([...snap.active]).toEqual(["scripture"]);
     expect([...snap.pool]).toEqual(["noah-kagan"]);
-    expect(snap.name).toBe("codex");
+    expect(snap.name).toBe("agents");
   });
 });

@@ -14,7 +14,7 @@ export interface CodexAdapterOptions extends DirectoryAdapterOptions {
 }
 
 export const defaultCodexActiveDir = (home: string = os.homedir()): string =>
-  path.join(home, ".agents", "skills");
+  path.join(home, ".codex", "skills");
 
 export const defaultCodexPoolDir = (home: string = os.homedir()): string =>
   path.join(home, ".loadout", "pool", CODEX_HARNESS_NAME);

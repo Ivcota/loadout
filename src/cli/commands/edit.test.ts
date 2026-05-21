@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Effect, Exit } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createAgentsAdapter } from "../../adapters/agents/index.js";
 import { createClaudeAdapter } from "../../adapters/claude/index.js";
 import { createCodexAdapter } from "../../adapters/codex/index.js";
 import { load as loadManifest, save as saveManifest } from "../../manifest/loader.js";
@@ -24,12 +25,12 @@ const run = <A, E>(eff: Effect.Effect<A, E>): Promise<A> => Effect.runPromise(ef
 const runExit = <A, E>(eff: Effect.Effect<A, E>) => Effect.runPromiseExit(eff);
 
 const seedActive = async (
-  harness: "claude" | "codex",
+  harness: "claude" | "codex" | "agents",
   skills: string[],
 ): Promise<void> => {
   const dir = path.join(
     tmpHome,
-    harness === "claude" ? ".claude" : ".agents",
+    harness === "claude" ? ".claude" : harness === "codex" ? ".codex" : ".agents",
     "skills",
   );
   for (const s of skills) {
@@ -42,6 +43,7 @@ const mkDeps = () => {
   const adapters = [
     createClaudeAdapter({ home: tmpHome }),
     createCodexAdapter({ home: tmpHome }),
+    createAgentsAdapter({ home: tmpHome }),
   ];
   return { paths, adapters };
 };

@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createAgentsAdapter } from "../../adapters/agents/index.js";
 import { createClaudeAdapter } from "../../adapters/claude/index.js";
 import { createCodexAdapter } from "../../adapters/codex/index.js";
 import { loadoutHome } from "../../paths.js";
@@ -22,12 +23,12 @@ const run = <A, E>(eff: Effect.Effect<A, E>): Promise<A> => Effect.runPromise(ef
 
 const seedActive = async (
   homeRoot: string,
-  harness: "claude" | "codex",
+  harness: "claude" | "codex" | "agents",
   skills: string[],
 ): Promise<void> => {
   const dir = path.join(
     homeRoot,
-    harness === "claude" ? ".claude" : ".agents",
+    harness === "claude" ? ".claude" : harness === "codex" ? ".codex" : ".agents",
     "skills",
   );
   for (const s of skills) {
@@ -40,6 +41,7 @@ const mkInput = () => {
   const adapters = [
     createClaudeAdapter({ home: tmpHome }),
     createCodexAdapter({ home: tmpHome }),
+    createAgentsAdapter({ home: tmpHome }),
   ];
   return { paths, adapters };
 };
@@ -63,7 +65,7 @@ describe("init command", () => {
       (await fs.stat(path.join(tmpHome, ".claude/skills/qa"))).isDirectory(),
     ).toBe(true);
     expect(
-      (await fs.stat(path.join(tmpHome, ".agents/skills/noah-kagan"))).isDirectory(),
+      (await fs.stat(path.join(tmpHome, ".codex/skills/noah-kagan"))).isDirectory(),
     ).toBe(true);
 
     // Pool dirs are NOT created by init — first move (on/off/use) creates them.
@@ -122,9 +124,12 @@ describe("init command", () => {
     const input = mkInput();
     const report = await run(init(input));
 
-    // Skill copied into both harnesses' active dirs.
+    // Skill copied into every harness's active dir.
     expect(
       (await fs.stat(path.join(tmpHome, ".claude/skills/loadout/SKILL.md"))).isFile(),
+    ).toBe(true);
+    expect(
+      (await fs.stat(path.join(tmpHome, ".codex/skills/loadout/SKILL.md"))).isFile(),
     ).toBe(true);
     expect(
       (await fs.stat(path.join(tmpHome, ".agents/skills/loadout/SKILL.md"))).isFile(),
@@ -135,18 +140,21 @@ describe("init command", () => {
 
     // Report surface mentions installation for each harness.
     expect(report.reservedInstalled.map((r) => r.harness).sort()).toEqual([
+      "agents",
       "claude",
       "codex",
     ]);
   });
 
-  it("dedupes skills present in both harnesses for the default mode", async () => {
+  it("dedupes skills present in multiple harnesses for the default mode", async () => {
     await seedActive(tmpHome, "claude", ["qa", "shared"]);
     await seedActive(tmpHome, "codex", ["shared", "noah-kagan"]);
+    await seedActive(tmpHome, "agents", ["shared", "office-hours"]);
     const input = mkInput();
     const report = await run(init(input));
     expect(report.manifest.modes["default"]?.skills).toEqual([
       "noah-kagan",
+      "office-hours",
       "qa",
       "shared",
     ]);

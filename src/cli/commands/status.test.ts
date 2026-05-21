@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createAgentsAdapter } from "../../adapters/agents/index.js";
 import { createClaudeAdapter } from "../../adapters/claude/index.js";
 import { createCodexAdapter } from "../../adapters/codex/index.js";
 import { loadoutHome } from "../../paths.js";
@@ -23,12 +24,12 @@ const run = <A, E>(eff: Effect.Effect<A, E>): Promise<A> => Effect.runPromise(ef
 
 const seedActive = async (
   homeRoot: string,
-  harness: "claude" | "codex",
+  harness: "claude" | "codex" | "agents",
   skills: string[],
 ): Promise<void> => {
   const dir = path.join(
     homeRoot,
-    harness === "claude" ? ".claude" : ".agents",
+    harness === "claude" ? ".claude" : harness === "codex" ? ".codex" : ".agents",
     "skills",
   );
   for (const s of skills) {
@@ -41,6 +42,7 @@ const mkInput = () => {
   const adapters = [
     createClaudeAdapter({ home: tmpHome }),
     createCodexAdapter({ home: tmpHome }),
+    createAgentsAdapter({ home: tmpHome }),
   ];
   return { paths, adapters };
 };
@@ -51,7 +53,11 @@ describe("status command", () => {
     const report = await run(status(input));
     expect(report.state.active_modes).toEqual([]);
     expect(report.inProgress).toBeNull();
-    expect(report.harnesses.map((h) => h.name)).toEqual(["claude", "codex"]);
+    expect(report.harnesses.map((h) => h.name)).toEqual([
+      "claude",
+      "codex",
+      "agents",
+    ]);
     expect(report.harnesses.every((h) => h.activeCount === 0)).toBe(true);
   });
 

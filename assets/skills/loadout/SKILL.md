@@ -99,7 +99,7 @@ loadout restore-all              # apply
 - A swap that's interrupted (Ctrl-C, crash) leaves an `in_progress` block in `state.json`. **The next command drains it first** — you don't need to do anything special, just re-run the command. To explicitly undo: pass `--rollback`.
 - Cross-filesystem moves automatically fall back to copy-then-delete. No action needed.
 - The `loadout` skill itself (this file) is reserved — it's hidden from every mode and never enters the pool. You can't accidentally swap it out from under yourself. It's removed by `loadout uninstall`.
-- Codex (`~/.agents/skills/`) and Claude Code (`~/.claude/skills/`) are both managed. A mode's skill list applies to whichever harness has that skill installed.
+- Claude Code (`~/.claude/skills/`), Codex (`~/.codex/skills/`), and shared agents (`~/.agents/skills/`) are managed separately. A mode's skill list applies to whichever harness has that skill installed.
 
 ## Don't
 
