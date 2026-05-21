@@ -7,6 +7,7 @@ import { createCodexAdapter } from "../adapters/codex/index.js";
 import { loadoutHome } from "../paths.js";
 import { VERSION } from "../index.js";
 import { doctor, renderDoctor } from "./commands/doctor.js";
+import { edit, renderEdit } from "./commands/edit.js";
 import { init } from "./commands/init.js";
 import { list, renderList } from "./commands/list.js";
 import {
@@ -254,6 +255,21 @@ const rmCmd = Command.make(
   Command.withDescription("Remove a skill from a mode in modes.yaml."),
 );
 
+const editCmd = Command.make(
+  "edit",
+  { mode: Args.text({ name: "mode" }) },
+  ({ mode }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* edit({ paths, adapters: allAdapters(), mode });
+      yield* Console.log(renderEdit(report));
+    }).pipe(failWith("loadout edit")),
+).pipe(
+  Command.withDescription(
+    "Open an interactive checkbox UI for choosing which skills belong to a mode.",
+  ),
+);
+
 const doctorCmd = Command.make("doctor", {}, () =>
   Effect.gen(function* () {
     const paths = loadoutHome();
@@ -332,6 +348,7 @@ const cli = Command.run(
       deleteCmd,
       addCmd,
       rmCmd,
+      editCmd,
       doctorCmd,
       uninstallCmd,
     ]),
