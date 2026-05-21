@@ -21,6 +21,7 @@ import {
   newMode,
   renderManifestEdit,
   rmSkill,
+  syncMode,
 } from "./commands/manifest.js";
 import { renderRestoreAll, restoreAll } from "./commands/restore-all.js";
 import { renderSave, save } from "./commands/save.js";
@@ -271,6 +272,25 @@ const rmCmd = Command.make(
   Command.withDescription("Remove a skill from a mode in modes.yaml."),
 );
 
+const syncCmd = Command.make(
+  "sync",
+  { mode: Args.text({ name: "mode" }) },
+  ({ mode }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* syncMode({
+        paths,
+        adapters: allAdapters(),
+        mode,
+      });
+      yield* Console.log(renderManifestEdit(report));
+    }).pipe(failWith("loadout sync")),
+).pipe(
+  Command.withDescription(
+    "Add every installed skill from active dirs and pools to a mode. Does not move files.",
+  ),
+);
+
 const saveCmd = Command.make(
   "save",
   {
@@ -431,6 +451,7 @@ const cli = Command.run(
       deleteCmd,
       addCmd,
       rmCmd,
+      syncCmd,
       saveCmd,
       editCmd,
       doctorCmd,

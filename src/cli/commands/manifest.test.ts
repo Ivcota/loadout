@@ -15,6 +15,7 @@ import {
   newMode,
   renderManifestEdit,
   rmSkill,
+  syncMode,
 } from "./manifest.js";
 
 let tmpHome: string;
@@ -83,6 +84,47 @@ describe("manifest editors", () => {
         const j = JSON.stringify(exit.cause.toJSON());
         expect(j).toContain("ManifestModeAlreadyExists");
       }
+    });
+  });
+
+  describe("sync <mode>", () => {
+    it("adds newly installed active skills to an existing mode", async () => {
+      await seedActive(tmpHome, "claude", ["qa"]);
+      const deps = mkDeps();
+      await run(init(deps));
+      await seedActive(tmpHome, "claude", ["new-skill"]);
+
+      const report = await run(syncMode({ ...deps, mode: "default" }));
+
+      expect(report.op).toBe("sync");
+      expect(report.added).toEqual(["new-skill"]);
+      expect(report.after.modes["default"]?.skills).toEqual(["new-skill", "qa"]);
+      const reloaded = await run(loadManifest(deps.paths.manifest));
+      expect(reloaded.modes["default"]?.skills).toEqual(["new-skill", "qa"]);
+    });
+
+    it("creates a missing mode from installed skills", async () => {
+      await seedActive(tmpHome, "claude", ["qa"]);
+      const deps = mkDeps();
+      await run(init(deps));
+      await run(deleteMode({ paths: deps.paths, mode: "default" }).pipe(Effect.either));
+      await run(saveState(deps.paths.state, { version: 1, active_modes: [], in_progress: null }));
+      await run(saveManifest(deps.paths.manifest, { version: 1, modes: {} }));
+
+      const report = await run(syncMode({ ...deps, mode: "default" }));
+
+      expect(report.after.modes["default"]?.skills).toEqual(["qa"]);
+    });
+
+    it("is a no-op when the mode already contains all installed skills", async () => {
+      await seedActive(tmpHome, "claude", ["qa"]);
+      const deps = mkDeps();
+      await run(init(deps));
+
+      const report = await run(syncMode({ ...deps, mode: "default" }));
+
+      expect(report.noop).toBe(true);
+      expect(renderManifestEdit(report)).toContain("already synced");
     });
   });
 

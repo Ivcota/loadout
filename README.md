@@ -67,6 +67,7 @@ loadout edit research
 loadout new   research
 loadout add   research investigate
 loadout rm    research old-skill
+loadout sync  default     # add newly installed skills to a mode
 loadout delete throwaway
 ```
 

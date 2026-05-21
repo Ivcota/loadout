@@ -62,7 +62,7 @@ export type ManifestEditError =
   | ManifestSkillNotKnown
   | ManifestSkillNotInMode;
 
-export type ManifestEditOp = "new" | "delete" | "add" | "rm";
+export type ManifestEditOp = "new" | "delete" | "add" | "rm" | "sync";
 
 export interface ManifestNewInput {
   readonly paths: LoadoutHome;
@@ -87,6 +87,12 @@ export interface ManifestRmInput {
   readonly skill: string;
 }
 
+export interface ManifestSyncInput {
+  readonly paths: LoadoutHome;
+  readonly adapters: ReadonlyArray<HarnessAdapter>;
+  readonly mode: string;
+}
+
 export interface ManifestEditReport {
   readonly op: ManifestEditOp;
   readonly mode: string;
@@ -94,6 +100,7 @@ export interface ManifestEditReport {
   readonly before: ModesManifest;
   readonly after: ModesManifest;
   readonly noop: boolean;
+  readonly added?: ReadonlyArray<string>;
 }
 
 const knownModes = (m: ModesManifest): ReadonlyArray<string> =>
@@ -251,6 +258,53 @@ const runRm = (
     } satisfies ManifestEditReport;
   });
 
+const runSync = (
+  input: ManifestSyncInput,
+): Effect.Effect<ManifestEditReport, ManifestEditError> =>
+  Effect.gen(function* () {
+    const before = yield* loadManifest(input.paths.manifest);
+    const snapshots = yield* Effect.all(
+      input.adapters.map((a) => a.snapshot()),
+    );
+    const known = new Set<string>();
+    for (const h of snapshots) {
+      for (const skill of h.active) known.add(skill);
+      for (const skill of h.pool) known.add(skill);
+    }
+
+    const existing = before.modes[input.mode]?.skills ?? [];
+    const existingSet = new Set(existing);
+    const added = [...known].filter((skill) => !existingSet.has(skill)).sort();
+    const skills = [...new Set([...existing, ...added])].sort();
+    const after: ModesManifest = {
+      ...before,
+      modes: { ...before.modes, [input.mode]: { skills } },
+    };
+
+    if (added.length === 0 && input.mode in before.modes) {
+      return {
+        op: "sync" as const,
+        mode: input.mode,
+        skill: null,
+        before,
+        after: before,
+        noop: true,
+        added,
+      } satisfies ManifestEditReport;
+    }
+
+    yield* saveManifest(input.paths.manifest, after);
+    return {
+      op: "sync" as const,
+      mode: input.mode,
+      skill: null,
+      before,
+      after,
+      noop: false,
+      added,
+    } satisfies ManifestEditReport;
+  });
+
 const withLock = <A, E>(
   paths: LoadoutHome,
   body: Effect.Effect<A, E>,
@@ -281,6 +335,11 @@ export const rmSkill = (
 ): Effect.Effect<ManifestEditReport, ManifestEditError> =>
   withLock(input.paths, runRm(input));
 
+export const syncMode = (
+  input: ManifestSyncInput,
+): Effect.Effect<ManifestEditReport, ManifestEditError> =>
+  withLock(input.paths, runSync(input));
+
 export const renderManifestEdit = (r: ManifestEditReport): string => {
   const skillCount = (m: ModesManifest, mode: string): number =>
     m.modes[mode]?.skills.length ?? 0;
@@ -296,5 +355,10 @@ export const renderManifestEdit = (r: ManifestEditReport): string => {
       return `+ '${r.skill}' → mode '${r.mode}' (${skillCount(r.after, r.mode)} skill(s))`;
     case "rm":
       return `- '${r.skill}' removed from mode '${r.mode}' (${skillCount(r.after, r.mode)} skill(s))`;
+    case "sync": {
+      const added = r.added ?? [];
+      if (r.noop) return `· mode '${r.mode}' already synced — no change`;
+      return `↻ mode '${r.mode}' synced (${skillCount(r.after, r.mode)} skill(s), +${added.length})`;
+    }
   }
 };
