@@ -35,7 +35,7 @@ const seedActive = async (
 ): Promise<void> => {
   const dir = path.join(
     homeRoot,
-    harness === "claude" ? ".claude" : ".codex",
+    harness === "claude" ? ".claude" : ".agents",
     "skills",
   );
   for (const s of skills) {

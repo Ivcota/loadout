@@ -27,7 +27,7 @@ const seedActive = async (
 ): Promise<void> => {
   const dir = path.join(
     homeRoot,
-    harness === "claude" ? ".claude" : ".codex",
+    harness === "claude" ? ".claude" : ".agents",
     "skills",
   );
   for (const s of skills) {
@@ -63,7 +63,7 @@ describe("init command", () => {
       (await fs.stat(path.join(tmpHome, ".claude/skills/qa"))).isDirectory(),
     ).toBe(true);
     expect(
-      (await fs.stat(path.join(tmpHome, ".codex/skills/noah-kagan"))).isDirectory(),
+      (await fs.stat(path.join(tmpHome, ".agents/skills/noah-kagan"))).isDirectory(),
     ).toBe(true);
 
     // Pool dirs are NOT created by init — first move (on/off/use) creates them.

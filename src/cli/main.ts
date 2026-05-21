@@ -83,7 +83,7 @@ const failWith = (label: string) =>
 const root = Command.make("loadout", {}, () =>
   Console.log(
     `loadout v${VERSION} — swap groups of AI skills in/out of your harness.\n` +
-      `\nv1 commands: init, status, list, on, off, use, new, delete, add, rm, doctor, uninstall  (edit pending)\n`,
+      `\nRun \`loadout --help\` to see available commands.`,
   ),
 );
 
@@ -122,9 +122,21 @@ const swapCmd = (
       }).pipe(failWith(`loadout ${name}`)),
   );
 
-const onCmd = swapCmd("on", on);
-const offCmd = swapCmd("off", off);
-const useCmd = swapCmd("use", use);
+const onCmd = swapCmd("on", on).pipe(
+  Command.withDescription(
+    "Activate a mode (stacks on top of currently active modes).",
+  ),
+);
+const offCmd = swapCmd("off", off).pipe(
+  Command.withDescription(
+    "Deactivate a mode (other active modes remain).",
+  ),
+);
+const useCmd = swapCmd("use", use).pipe(
+  Command.withDescription(
+    "Replace all active modes with this single mode.",
+  ),
+);
 
 const initCmd = Command.make("init", {}, () =>
   Effect.gen(function* () {
@@ -149,6 +161,10 @@ const initCmd = Command.make("init", {}, () =>
     lines.push(`  no files moved.`);
     yield* Console.log(lines.join("\n"));
   }).pipe(failWith("loadout init")),
+).pipe(
+  Command.withDescription(
+    "Discover skills, create modes.yaml + state.json, seed the 'default' mode.",
+  ),
 );
 
 const statusCmd = Command.make("status", {}, () =>
@@ -157,6 +173,10 @@ const statusCmd = Command.make("status", {}, () =>
     const report = yield* status({ paths, adapters: allAdapters() });
     yield* Console.log(renderStatus(report));
   }).pipe(failWith("loadout status")),
+).pipe(
+  Command.withDescription(
+    "Show active modes, in-progress swaps, and per-harness skill counts.",
+  ),
 );
 
 const listCmd = Command.make("list", {}, () =>
@@ -165,6 +185,8 @@ const listCmd = Command.make("list", {}, () =>
     const report = yield* list({ paths });
     yield* Console.log(renderList(report));
   }).pipe(failWith("loadout list")),
+).pipe(
+  Command.withDescription("List all modes and their skill counts."),
 );
 
 const newCmd = Command.make(
@@ -176,6 +198,8 @@ const newCmd = Command.make(
       const report = yield* newMode({ paths, mode });
       yield* Console.log(renderManifestEdit(report));
     }).pipe(failWith("loadout new")),
+).pipe(
+  Command.withDescription("Create a new empty mode in modes.yaml."),
 );
 
 const deleteCmd = Command.make(
@@ -187,6 +211,10 @@ const deleteCmd = Command.make(
       const report = yield* deleteMode({ paths, mode });
       yield* Console.log(renderManifestEdit(report));
     }).pipe(failWith("loadout delete")),
+).pipe(
+  Command.withDescription(
+    "Remove a mode from modes.yaml (mode must not be active).",
+  ),
 );
 
 const addCmd = Command.make(
@@ -206,6 +234,8 @@ const addCmd = Command.make(
       });
       yield* Console.log(renderManifestEdit(report));
     }).pipe(failWith("loadout add")),
+).pipe(
+  Command.withDescription("Add a skill to a mode in modes.yaml."),
 );
 
 const rmCmd = Command.make(
@@ -220,6 +250,8 @@ const rmCmd = Command.make(
       const report = yield* rmSkill({ paths, mode, skill });
       yield* Console.log(renderManifestEdit(report));
     }).pipe(failWith("loadout rm")),
+).pipe(
+  Command.withDescription("Remove a skill from a mode in modes.yaml."),
 );
 
 const doctorCmd = Command.make("doctor", {}, () =>
@@ -233,6 +265,10 @@ const doctorCmd = Command.make("doctor", {}, () =>
       yield* Effect.sync(() => process.exit(code));
     }
   }).pipe(failWith("loadout doctor")),
+).pipe(
+  Command.withDescription(
+    "Verify manifest/state/filesystem invariants. Exit code = issue count.",
+  ),
 );
 
 const promptYesNo = (question: string): Effect.Effect<boolean> =>
@@ -277,6 +313,10 @@ const uninstallCmd = Command.make(
       });
       yield* Console.log(renderUninstall(report));
     }).pipe(failWith("loadout uninstall")),
+).pipe(
+  Command.withDescription(
+    "Move every pool skill back to its active dir and remove ~/.loadout.",
+  ),
 );
 
 const cli = Command.run(
@@ -304,5 +344,5 @@ const cli = Command.run(
 
 cli(process.argv).pipe(
   Effect.provide(NodeContext.layer),
-  NodeRuntime.runMain,
+  (effect) => NodeRuntime.runMain(effect, { disableErrorReporting: true }),
 );

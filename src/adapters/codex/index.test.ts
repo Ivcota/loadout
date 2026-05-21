@@ -21,9 +21,9 @@ afterEach(async () => {
 });
 
 describe("CodexAdapter", () => {
-  it("defaults to ~/.codex/skills and ~/.loadout/pool/codex", () => {
+  it("defaults to ~/.agents/skills and ~/.loadout/pool/codex", () => {
     const home = "/tmp/fake-home";
-    expect(defaultCodexActiveDir(home)).toBe("/tmp/fake-home/.codex/skills");
+    expect(defaultCodexActiveDir(home)).toBe("/tmp/fake-home/.agents/skills");
     expect(defaultCodexPoolDir(home)).toBe("/tmp/fake-home/.loadout/pool/codex");
   });
 
@@ -43,7 +43,7 @@ describe("CodexAdapter", () => {
 
   it("derives paths from a custom home", () => {
     const a = createCodexAdapter({ home: tmpHome });
-    expect(a.activeDir).toBe(path.join(tmpHome, ".codex", "skills"));
+    expect(a.activeDir).toBe(path.join(tmpHome, ".agents", "skills"));
     expect(a.poolDir).toBe(path.join(tmpHome, ".loadout", "pool", "codex"));
   });
 
