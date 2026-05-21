@@ -35,7 +35,7 @@ A *mode* is a named subset of skills. Activating a mode moves its skills from po
 ## Install & first run
 
 ```sh
-npm install -g loadout    # (once published)
+npm install -g @ivcota/loadout
 loadout init              # scan harnesses, seed 'default' mode with everything
 loadout status            # show active modes + per-harness skill counts
 ```
