@@ -1,7 +1,8 @@
 import * as readline from "node:readline";
 import { Args, Command, Options } from "@effect/cli";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
-import { Console, Effect } from "effect";
+import { Console, Effect, Option } from "effect";
+import { load as loadManifest } from "../manifest/loader.js";
 import { createAgentsAdapter } from "../adapters/agents/index.js";
 import { createClaudeAdapter } from "../adapters/claude/index.js";
 import { createCodexAdapter } from "../adapters/codex/index.js";
@@ -36,6 +37,12 @@ const allAdapters = () => [
   createCodexAdapter(),
   createAgentsAdapter(),
 ];
+
+interface DefaultModeMissing {
+  readonly _tag: "DefaultModeMissing";
+  readonly op: "reset" | "sync";
+  readonly knownModes: ReadonlyArray<string>;
+}
 
 const describeError = (err: unknown): string => {
   if (err === null || err === undefined) return String(err);
@@ -78,6 +85,15 @@ const describeError = (err: unknown): string => {
     if (e["_tag"] === "RestoreInProgress") {
       return `cannot restore-all while a swap is in progress (${e["op"]} ${e["mode"]}). resolve with \`loadout ${e["op"]} ${e["mode"]}\` or \`loadout ${e["op"]} ${e["mode"]} --rollback\`, or re-run with --force`;
     }
+    if (e["_tag"] === "DefaultModeMissing") {
+      const known = (e["knownModes"] as string[] | undefined) ?? [];
+      const op = (e["op"] as string | undefined) ?? "sync";
+      return `no 'default' mode found in modes.yaml. ${
+        known.length === 0
+          ? `run \`loadout init\` to seed it`
+          : `pass an explicit mode: \`loadout ${op} <mode>\` (known: ${known.join(", ")})`
+      }`;
+    }
     if (typeof e["message"] === "string") return e["message"];
     if (typeof e["_tag"] === "string") {
       try {
@@ -106,7 +122,9 @@ const failWith = (label: string) =>
 const root = Command.make("loadout", {}, () =>
   Console.log(
     `loadout v${VERSION} — swap groups of AI skills in/out of your harness.\n` +
-      `\nRun \`loadout --help\` to see available commands.`,
+      `\n  loadout status   see what's active right now` +
+      `\n  loadout reset    return to the default mode` +
+      `\n  loadout --help   list every command`,
   ),
 );
 
@@ -158,6 +176,35 @@ const offCmd = swapCmd("off", off).pipe(
 const useCmd = swapCmd("use", use).pipe(
   Command.withDescription(
     "Replace all active modes with this single mode.",
+  ),
+);
+
+const resetCmd = Command.make(
+  "reset",
+  { dryRun: dryRunOpt, rollback: rollbackOpt },
+  ({ dryRun, rollback }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const manifest = yield* loadManifest(paths.manifest);
+      if (!("default" in manifest.modes)) {
+        return yield* Effect.fail({
+          _tag: "DefaultModeMissing" as const,
+          op: "reset" as const,
+          knownModes: Object.keys(manifest.modes).sort(),
+        } satisfies DefaultModeMissing);
+      }
+      const report = yield* use({
+        paths,
+        adapters: allAdapters(),
+        mode: "default",
+        dryRun,
+        rollback,
+      });
+      yield* Console.log(renderSwap(report));
+    }).pipe(failWith("loadout reset")),
+).pipe(
+  Command.withDescription(
+    "Return to the default mode (alias for `loadout use default`).",
   ),
 );
 
@@ -282,20 +329,32 @@ const rmCmd = Command.make(
 
 const syncCmd = Command.make(
   "sync",
-  { mode: Args.text({ name: "mode" }) },
+  { mode: Args.optional(Args.text({ name: "mode" })) },
   ({ mode }) =>
     Effect.gen(function* () {
       const paths = loadoutHome();
+      const explicit = Option.isSome(mode);
+      const modeName = Option.getOrElse(mode, () => "default");
+      if (!explicit) {
+        const manifest = yield* loadManifest(paths.manifest);
+        if (!("default" in manifest.modes)) {
+          return yield* Effect.fail({
+            _tag: "DefaultModeMissing" as const,
+            op: "sync" as const,
+            knownModes: Object.keys(manifest.modes).sort(),
+          } satisfies DefaultModeMissing);
+        }
+      }
       const report = yield* syncMode({
         paths,
         adapters: allAdapters(),
-        mode,
+        mode: modeName,
       });
       yield* Console.log(renderManifestEdit(report));
     }).pipe(failWith("loadout sync")),
 ).pipe(
   Command.withDescription(
-    "Add every installed skill from active dirs and pools to a mode. Does not move files.",
+    "Add every installed skill to a mode (defaults to 'default'). Does not move files.",
   ),
 );
 
@@ -455,6 +514,7 @@ const cli = Command.run(
       onCmd,
       offCmd,
       useCmd,
+      resetCmd,
       newCmd,
       deleteCmd,
       addCmd,

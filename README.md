@@ -1,12 +1,14 @@
-# loadout
+# Your agent is ignoring half the skills you installed.
 
-> Keep hundreds of AI skills installed without overwhelming your agent. Switch the visible set by task — product, design, research, coding — crash-safe, one-command rollback.
+**`loadout`** keeps every skill installed and shows your agent only the ones for today's work. Switch the visible set by task — product, design, research, coding. Crash-safe, one-command rollback.
 
-**Status:** v0.0.0 — CLI surface lands incrementally per the build plan.
+[![npm version](https://img.shields.io/npm/v/@ivcota/loadout.svg)](https://www.npmjs.com/package/@ivcota/loadout)
+[![node](https://img.shields.io/node/v/@ivcota/loadout.svg)](https://nodejs.org)
+[![license](https://img.shields.io/npm/l/@ivcota/loadout.svg)](./LICENSE)
 
 ## The problem
 
-You've collected a lot of AI skills. `~/.claude/skills/` is full. Codex too. Past a certain count, your harness silently drops some — they're installed, but invisible to the model. You end up:
+You've installed more skills than your agent can use. `~/.claude/skills/` is full. Codex too. Past a certain count, your harness silently drops some — they're installed, but invisible to the model. You end up:
 
 - Manually moving folders in and out of `skills/`
 - Tolerating the clutter and hoping the model picks the right one
@@ -32,7 +34,20 @@ A *mode* is a named subset of skills. Activating a mode moves its skills from po
 - **One escape hatch.** `loadout restore-all` puts everything back where the harness can see it.
 - **Multi-harness.** Claude Code, Codex, and shared `~/.agents/skills` harnesses out of the box; one manifest covers them all.
 
-> **Trying someone else's setup?** Want to play with a curated skill pack (gstack, a friend's dotfiles, anything) without their skills cluttering yours? Run `loadout save mine` to snapshot what you already have, install the pack, then `loadout save theirs`. Now `loadout use mine` and `loadout use theirs` flip between the two — borrow setups freely, your workflow stays intact.
+## Borrow other people's setups
+
+Want to play with a curated skill pack (gstack, a friend's dotfiles, anything) without their skills cluttering yours?
+
+```sh
+loadout save mine        # snapshot what you already have
+# ...install the other pack...
+loadout save theirs      # snapshot the new state
+
+loadout use mine         # flip back to your setup
+loadout use theirs       # flip to theirs
+```
+
+Borrow setups freely, your workflow stays intact.
 
 ## Install & first run
 
@@ -41,6 +56,14 @@ npm install -g @ivcota/loadout
 loadout init              # scan harnesses, seed 'default' mode with everything
 loadout status            # show active modes + per-harness skill counts
 ```
+
+Or try it without installing globally:
+
+```sh
+npx @ivcota/loadout status
+```
+
+Requires Node 20+.
 
 `init` writes `~/.loadout/modes.yaml` and `~/.loadout/state.json`. It does **not** move any files. Codex skills are managed at `~/.codex/skills`; `~/.agents/skills` is managed separately as the shared agents harness.
 
@@ -56,6 +79,9 @@ loadout on design
 # Done with design — drop it, keep product
 loadout off design
 
+# Take me back to my default set
+loadout reset
+
 # Where am I right now?
 loadout status
 
@@ -69,7 +95,8 @@ loadout edit research
 loadout new   research
 loadout add   research investigate
 loadout rm    research old-skill
-loadout sync  default     # add newly installed skills to a mode
+loadout sync               # pick up newly installed skills into 'default'
+loadout sync  research     # ...or into a specific mode
 loadout delete throwaway
 ```
 
@@ -129,19 +156,6 @@ loadout use product --rollback   # revert the in-progress op
 
 Each harness adapter owns an *active dir* (Claude: `~/.claude/skills`, Codex: `~/.codex/skills`, shared agents: `~/.agents/skills`) and a *pool dir* (`~/.loadout/pool/<harness>/`). A mode is a list of skill folder names. Activating a mode plans a set of `activate` moves (pool → active) for skills not yet active; deactivating plans `deactivate` moves. Plans are written to `state.json` as an `in_progress` block before any rename, then drained one move at a time. On crash, the next command sees `in_progress` and resumes. Cross-filesystem renames fall back to copy-then-delete.
 
-## Design
-
-See the design doc at `~/.gstack/projects/skill-mode/iversondiles-main-design-20260520-162620.md` (gstack artifact) for the full architecture, eng review, and build order.
-
-## Stack
-
-- TypeScript (Node 20+, ESM)
-- Effect-TS runtime (`effect`, `@effect/cli`, `@effect/platform`)
-- Ink for the TUI
-- `proper-lockfile`, `write-file-atomic`, `fs-extra` for crash-safe swaps
-- Vitest + `@effect/vitest` + `fast-check` for tests
-- tsup for build
-
 ## Dev
 
 ```sh
@@ -151,6 +165,14 @@ npm run typecheck
 npm run build
 node dist/cli.js --help
 ```
+
+Stack: TypeScript (Node 20+, ESM) · Effect-TS (`effect`, `@effect/cli`, `@effect/platform`) · Ink for the TUI · `proper-lockfile`, `write-file-atomic`, `fs-extra` for crash-safe swaps · Vitest + `@effect/vitest` + `fast-check` for tests · tsup for build.
+
+## Links
+
+- [npm](https://www.npmjs.com/package/@ivcota/loadout)
+- [GitHub](https://github.com/Ivcota/loadout)
+- [Issues](https://github.com/Ivcota/loadout/issues)
 
 ## License
 
