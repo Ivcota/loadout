@@ -19,6 +19,15 @@ const listDirs = async (dir: string): Promise<string[]> => {
   }
 };
 
+// Skills loadout manages itself. Hidden from snapshot so they're never swept
+// into modes, swapped into the pool, flagged by doctor, or moved by uninstall.
+// The skill files are written into active dirs by `init` and removed by
+// `uninstall`, never participating in normal swap planning.
+export const RESERVED_SKILLS: ReadonlySet<string> = new Set(["loadout"]);
+
+export const isReservedSkill = (name: string): boolean =>
+  RESERVED_SKILLS.has(name);
+
 const causeOf = (err: unknown): AdapterError["cause"] => {
   const code = (err as NodeJS.ErrnoException | undefined)?.code;
   switch (code) {
@@ -56,12 +65,14 @@ export class DirectoryAdapter implements HarnessAdapter {
           listDirs(this.activeDir),
           listDirs(this.poolDir),
         ]);
+        const visible = (xs: string[]): Set<string> =>
+          new Set(xs.filter((s) => !RESERVED_SKILLS.has(s)));
         return {
           name: this.name,
           activeDir: this.activeDir,
           poolDir: this.poolDir,
-          active: new Set(active),
-          pool: new Set(pool),
+          active: visible(active),
+          pool: visible(pool),
         } satisfies HarnessSnapshot;
       },
       catch: (cause) =>

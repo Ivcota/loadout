@@ -172,6 +172,33 @@ describe("uninstall", () => {
     expect(await exists(deps.paths.root)).toBe(true);
   });
 
+  it("removes the reserved 'loadout' skill from every adapter's active dir", async () => {
+    await seedActive(tmpHome, "claude", ["qa"]);
+    const deps = mkDeps();
+    await run(init(deps));
+
+    // init must have installed the reserved skill.
+    expect(
+      await exists(path.join(tmpHome, ".claude/skills/loadout/SKILL.md")),
+    ).toBe(true);
+    expect(
+      await exists(path.join(tmpHome, ".agents/skills/loadout/SKILL.md")),
+    ).toBe(true);
+
+    const report = await run(uninstall(deps));
+    expect(report.removed).toBe(true);
+    expect(report.reservedRemoved.map((r) => r.harness).sort()).toEqual([
+      "claude",
+      "codex",
+    ]);
+    expect(
+      await exists(path.join(tmpHome, ".claude/skills/loadout")),
+    ).toBe(false);
+    expect(
+      await exists(path.join(tmpHome, ".agents/skills/loadout")),
+    ).toBe(false);
+  });
+
   it("is idempotent on retry: a half-finished run resumes cleanly", async () => {
     await seedActive(tmpHome, "claude", ["qa"]);
     const deps = mkDeps();
@@ -214,6 +241,7 @@ describe("renderUninstall", () => {
       removed: true,
       dryRun: false,
       stateBefore: { version: 1, active_modes: [], in_progress: null },
+      reservedRemoved: [],
     });
     expect(out).toContain("loadout uninstall — root: /tmp/.loadout");
     expect(out).toContain("→ activate review (claude)");
@@ -227,6 +255,7 @@ describe("renderUninstall", () => {
       removed: true,
       dryRun: false,
       stateBefore: { version: 1, active_modes: [], in_progress: null },
+      reservedRemoved: [],
     });
     expect(out).toContain("no pool skills to move back");
     expect(out).toContain("✓ removed");
@@ -239,6 +268,7 @@ describe("renderUninstall", () => {
       removed: false,
       dryRun: true,
       stateBefore: { version: 1, active_modes: [], in_progress: null },
+      reservedRemoved: [],
     });
     expect(out.startsWith("[dry-run]")).toBe(true);
     expect(out).toContain("not removed");

@@ -166,6 +166,9 @@ const initCmd = Command.make("init", {}, () =>
     for (const d of report.discovered) {
       lines.push(`  ${d.harness}: ${d.skills.length} active skill(s) discovered`);
     }
+    for (const r of report.reservedInstalled) {
+      lines.push(`  ✓ installed reserved skill '${r.skill}' → ${r.path}`);
+    }
     lines.push(
       report.manifestWritten
         ? `  ✓ wrote ${paths.manifest.manifestFile} (mode "default" seeded with ${report.manifest.modes["default"]?.skills.length ?? 0} skill(s))`

@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Effect } from "effect";
+import { RESERVED_SKILLS } from "../../adapters/DirectoryAdapter.js";
 import type {
   AdapterError,
   HarnessAdapter,
@@ -44,6 +45,11 @@ export interface UninstallReport {
   readonly removed: boolean;
   readonly dryRun: boolean;
   readonly stateBefore: State;
+  readonly reservedRemoved: ReadonlyArray<{
+    readonly harness: string;
+    readonly skill: string;
+    readonly path: string;
+  }>;
 }
 
 const runUninstall = (
@@ -83,6 +89,14 @@ const runUninstall = (
       }
     }
 
+    const plannedReserved = input.adapters.flatMap((a) =>
+      [...RESERVED_SKILLS].map((skill) => ({
+        harness: a.name,
+        skill,
+        path: path.join(a.activeDir, skill),
+      })),
+    );
+
     if (dryRun) {
       return {
         root: input.paths.root,
@@ -90,6 +104,7 @@ const runUninstall = (
         removed: false,
         dryRun: true,
         stateBefore,
+        reservedRemoved: plannedReserved,
       } satisfies UninstallReport;
     }
 
@@ -109,6 +124,18 @@ const runUninstall = (
         } as AdapterError);
       }
       yield* adapter.apply(move);
+    }
+
+    // Remove reserved skills from every adapter's active dir. These were
+    // installed by `init` and are not tracked in modes.yaml, so we sweep
+    // them here directly.
+    const reservedRemoved: { harness: string; skill: string; path: string }[] =
+      [];
+    for (const r of plannedReserved) {
+      yield* Effect.promise(() =>
+        fs.rm(r.path, { recursive: true, force: true }),
+      );
+      reservedRemoved.push(r);
     }
 
     // Release the lock BEFORE rm -rf, otherwise proper-lockfile's cleanup
@@ -132,6 +159,7 @@ const runUninstall = (
       removed: true,
       dryRun: false,
       stateBefore,
+      reservedRemoved,
     } satisfies UninstallReport;
   });
 
@@ -156,6 +184,10 @@ export const renderUninstall = (r: UninstallReport): string => {
     for (const m of r.moves) {
       lines.push(`  → activate ${m.skill} (${m.harness})`);
     }
+  }
+  for (const rr of r.reservedRemoved) {
+    const verb = r.dryRun ? "would remove" : "removed";
+    lines.push(`  → ${verb} reserved skill ${rr.skill} (${rr.harness}) at ${rr.path}`);
   }
   if (r.dryRun) {
     lines.push(`(dry-run: no files moved, ${r.root} not removed)`);

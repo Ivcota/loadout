@@ -1,8 +1,12 @@
+import * as path from "node:path";
 import { Effect } from "effect";
+import fsExtra from "fs-extra";
+import { RESERVED_SKILLS } from "../../adapters/DirectoryAdapter.js";
 import type {
   AdapterError,
   HarnessAdapter,
 } from "../../adapters/HarnessAdapter.js";
+import { bundledReservedSkillDir } from "../../assets.js";
 import type {
   ManifestIOError,
   ManifestParseError,
@@ -42,6 +46,11 @@ export interface InitReport {
     readonly harness: string;
     readonly skills: ReadonlyArray<string>;
   }>;
+  readonly reservedInstalled: ReadonlyArray<{
+    readonly harness: string;
+    readonly skill: string;
+    readonly path: string;
+  }>;
 }
 
 export type InitError =
@@ -53,8 +62,33 @@ export type InitError =
   | StateParseError
   | StateVersionError;
 
+const installReservedSkills = (
+  adapters: ReadonlyArray<HarnessAdapter>,
+): Effect.Effect<
+  ReadonlyArray<{ harness: string; skill: string; path: string }>
+> =>
+  Effect.promise(async () => {
+    const installed: { harness: string; skill: string; path: string }[] = [];
+    for (const adapter of adapters) {
+      for (const skill of RESERVED_SKILLS) {
+        const src = bundledReservedSkillDir(skill);
+        const dest = path.join(adapter.activeDir, skill);
+        await fsExtra.ensureDir(adapter.activeDir);
+        await fsExtra.copy(src, dest, { overwrite: true, errorOnExist: false });
+        installed.push({ harness: adapter.name, skill, path: dest });
+      }
+    }
+    return installed;
+  });
+
 const runInit = (input: InitInput): Effect.Effect<InitReport, InitError> =>
   Effect.gen(function* () {
+    // Install reserved skills BEFORE snapshotting active dirs. The reserved
+    // names are filtered out of snapshot() so they never seep into the
+    // "default" mode, but installing first ensures the loadout-management
+    // skill is present immediately after `init` completes.
+    const reservedInstalled = yield* installReservedSkills(input.adapters);
+
     const discovered = yield* Effect.all(
       input.adapters.map((a) =>
         a.snapshot().pipe(
@@ -107,6 +141,7 @@ const runInit = (input: InitInput): Effect.Effect<InitReport, InitError> =>
       manifest,
       state: stateOut,
       discovered,
+      reservedInstalled,
     };
   });
 

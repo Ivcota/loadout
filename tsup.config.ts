@@ -13,5 +13,8 @@ export default defineConfig({
   clean: true,
   dts: true,
   shims: false,
+  // Copy bundled skill assets (assets/skills/...) into dist/ so the published
+  // package can resolve them at runtime via paths relative to dist/cli.js.
+  publicDir: "assets",
   banner: ({ format }) => (format === "esm" ? { js: "#!/usr/bin/env node" } : {}),
 });

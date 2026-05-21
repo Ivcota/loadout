@@ -117,6 +117,29 @@ describe("init command", () => {
     expect(report.state.active_modes).toEqual(["product"]);
   });
 
+  it("installs the bundled 'loadout' skill into each adapter's active dir, but never adds it to the default mode", async () => {
+    await seedActive(tmpHome, "claude", ["qa"]);
+    const input = mkInput();
+    const report = await run(init(input));
+
+    // Skill copied into both harnesses' active dirs.
+    expect(
+      (await fs.stat(path.join(tmpHome, ".claude/skills/loadout/SKILL.md"))).isFile(),
+    ).toBe(true);
+    expect(
+      (await fs.stat(path.join(tmpHome, ".agents/skills/loadout/SKILL.md"))).isFile(),
+    ).toBe(true);
+
+    // Default mode must NOT include the reserved skill name.
+    expect(report.manifest.modes["default"]?.skills).not.toContain("loadout");
+
+    // Report surface mentions installation for each harness.
+    expect(report.reservedInstalled.map((r) => r.harness).sort()).toEqual([
+      "claude",
+      "codex",
+    ]);
+  });
+
   it("dedupes skills present in both harnesses for the default mode", async () => {
     await seedActive(tmpHome, "claude", ["qa", "shared"]);
     await seedActive(tmpHome, "codex", ["shared", "noah-kagan"]);

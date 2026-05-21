@@ -120,6 +120,17 @@ describe("DirectoryAdapter", () => {
     }
   });
 
+  it("snapshot hides reserved skill names from active and pool", async () => {
+    const a = mkAdapter();
+    await fs.mkdir(path.join(a.activeDir, "loadout"), { recursive: true });
+    await fs.mkdir(path.join(a.activeDir, "qa"), { recursive: true });
+    await fs.mkdir(path.join(a.poolDir, "loadout"), { recursive: true });
+    await fs.mkdir(path.join(a.poolDir, "review"), { recursive: true });
+    const snap = await run(a.snapshot());
+    expect([...snap.active].sort()).toEqual(["qa"]);
+    expect([...snap.pool].sort()).toEqual(["review"]);
+  });
+
   it("invert flips op and swaps source/dest paths", () => {
     const a = mkAdapter();
     const m = moveSpec(a, "qa", "activate");
