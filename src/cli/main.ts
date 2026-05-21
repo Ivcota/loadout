@@ -6,7 +6,12 @@ import { createClaudeAdapter } from "../adapters/claude/index.js";
 import { createCodexAdapter } from "../adapters/codex/index.js";
 import { loadoutHome } from "../paths.js";
 import { VERSION } from "../index.js";
-import { doctor, renderDoctor } from "./commands/doctor.js";
+import {
+  doctor,
+  doctorFix,
+  renderDoctor,
+  renderDoctorFix,
+} from "./commands/doctor.js";
 import { edit, renderEdit } from "./commands/edit.js";
 import { init } from "./commands/init.js";
 import { list, renderList } from "./commands/list.js";
@@ -17,6 +22,8 @@ import {
   renderManifestEdit,
   rmSkill,
 } from "./commands/manifest.js";
+import { renderRestoreAll, restoreAll } from "./commands/restore-all.js";
+import { renderSave, save } from "./commands/save.js";
 import { renderStatus, status } from "./commands/status.js";
 import { off, on, renderSwap, use } from "./commands/swap.js";
 import type { SwapInput } from "./commands/swap.js";
@@ -55,6 +62,15 @@ const describeError = (err: unknown): string => {
     }
     if (e["_tag"] === "UninstallInProgress") {
       return `cannot uninstall while a swap is in progress (${e["op"]} ${e["mode"]}). resolve with \`loadout ${e["op"]} ${e["mode"]}\` or \`loadout ${e["op"]} ${e["mode"]} --rollback\`, or re-run with --force`;
+    }
+    if (e["_tag"] === "SaveModeExists") {
+      return `mode '${e["mode"]}' already exists. re-run with --force to overwrite`;
+    }
+    if (e["_tag"] === "SaveEmpty") {
+      return `no active skills found to capture — activate a skill or use \`loadout new <mode>\` for an empty mode`;
+    }
+    if (e["_tag"] === "RestoreInProgress") {
+      return `cannot restore-all while a swap is in progress (${e["op"]} ${e["mode"]}). resolve with \`loadout ${e["op"]} ${e["mode"]}\` or \`loadout ${e["op"]} ${e["mode"]} --rollback\`, or re-run with --force`;
     }
     if (typeof e["message"] === "string") return e["message"];
     if (typeof e["_tag"] === "string") {
@@ -255,6 +271,29 @@ const rmCmd = Command.make(
   Command.withDescription("Remove a skill from a mode in modes.yaml."),
 );
 
+const saveCmd = Command.make(
+  "save",
+  {
+    mode: Args.text({ name: "mode" }),
+    force: Options.boolean("force"),
+  },
+  ({ mode, force }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* save({
+        paths,
+        adapters: allAdapters(),
+        mode,
+        force,
+      });
+      yield* Console.log(renderSave(report));
+    }).pipe(failWith("loadout save")),
+).pipe(
+  Command.withDescription(
+    "Snapshot the current active skill set across harnesses into <mode> in modes.yaml.",
+  ),
+);
+
 const editCmd = Command.make(
   "edit",
   { mode: Args.text({ name: "mode" }) },
@@ -270,20 +309,41 @@ const editCmd = Command.make(
   ),
 );
 
-const doctorCmd = Command.make("doctor", {}, () =>
-  Effect.gen(function* () {
-    const paths = loadoutHome();
-    const report = yield* doctor({ paths, adapters: allAdapters() });
-    yield* Console.log(renderDoctor(report));
-    if (report.issues.length > 0) {
-      // Exit code = issue count, clamped to [1, 125] to stay in shell-safe range.
-      const code = Math.min(report.issues.length, 125);
-      yield* Effect.sync(() => process.exit(code));
-    }
-  }).pipe(failWith("loadout doctor")),
+const doctorCmd = Command.make(
+  "doctor",
+  {
+    fix: Options.boolean("fix"),
+    dryRun: Options.boolean("dry-run"),
+  },
+  ({ fix, dryRun }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      if (fix) {
+        const fixReport = yield* doctorFix({
+          paths,
+          adapters: allAdapters(),
+          dryRun,
+        });
+        yield* Console.log(renderDoctorFix(fixReport));
+        const remaining = dryRun
+          ? fixReport.before.issues.length
+          : fixReport.after.issues.length;
+        if (remaining > 0) {
+          const code = Math.min(remaining, 125);
+          yield* Effect.sync(() => process.exit(code));
+        }
+        return;
+      }
+      const report = yield* doctor({ paths, adapters: allAdapters() });
+      yield* Console.log(renderDoctor(report));
+      if (report.issues.length > 0) {
+        const code = Math.min(report.issues.length, 125);
+        yield* Effect.sync(() => process.exit(code));
+      }
+    }).pipe(failWith("loadout doctor")),
 ).pipe(
   Command.withDescription(
-    "Verify manifest/state/filesystem invariants. Exit code = issue count.",
+    "Verify manifest/state/filesystem invariants. Pass --fix to auto-repair safe issues (preview with --fix --dry-run). Exit code = remaining issue count.",
   ),
 );
 
@@ -301,6 +361,29 @@ const promptYesNo = (question: string): Effect.Effect<boolean> =>
         });
       }),
   );
+
+const restoreAllCmd = Command.make(
+  "restore-all",
+  {
+    force: Options.boolean("force"),
+    dryRun: Options.boolean("dry-run"),
+  },
+  ({ force, dryRun }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* restoreAll({
+        paths,
+        adapters: allAdapters(),
+        force,
+        dryRun,
+      });
+      yield* Console.log(renderRestoreAll(report));
+    }).pipe(failWith("loadout restore-all")),
+).pipe(
+  Command.withDescription(
+    "Safety escape hatch: move every pool skill back to its active dir and clear active_modes. Keeps modes.yaml. Preview with --dry-run.",
+  ),
+);
 
 const uninstallCmd = Command.make(
   "uninstall",
@@ -331,7 +414,7 @@ const uninstallCmd = Command.make(
     }).pipe(failWith("loadout uninstall")),
 ).pipe(
   Command.withDescription(
-    "Move every pool skill back to its active dir and remove ~/.loadout.",
+    "Move every pool skill back to its active dir and remove ~/.loadout. Preview with --dry-run; skip the prompt with --yes.",
   ),
 );
 
@@ -348,8 +431,10 @@ const cli = Command.run(
       deleteCmd,
       addCmd,
       rmCmd,
+      saveCmd,
       editCmd,
       doctorCmd,
+      restoreAllCmd,
       uninstallCmd,
     ]),
   ),
