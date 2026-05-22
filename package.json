@@ -1,6 +1,6 @@
 {
   "name": "@ivcota/loadout",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publishConfig": {
     "access": "public"
   },
@@ -26,6 +26,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
+    "release": "tsx scripts/release.ts",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build && npm test"
   },
