@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+### Fixed
+- `DirectoryAdapter.snapshot` now ignores hidden directories (names starting with `.`) when listing active and pool skills. Codex creates `.system/` to hold its bundled system skills (`imagegen`, `skill-creator`, etc.); previously loadout treated it as a user skill and tried to swap it in/out, which failed with `ENOTEMPTY` whenever a stale copy already existed in the pool.
 
 ## 0.3.0 - 2026-05-22
 

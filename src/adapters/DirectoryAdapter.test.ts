@@ -56,6 +56,16 @@ describe("DirectoryAdapter", () => {
     expect([...snap.pool]).toEqual(["qa"]);
   });
 
+  it("snapshot ignores hidden directories (e.g. Codex's .system/)", async () => {
+    const a = mkAdapter();
+    await fs.mkdir(path.join(a.activeDir, "qa"), { recursive: true });
+    await fs.mkdir(path.join(a.activeDir, ".system", "imagegen"), { recursive: true });
+    await fs.mkdir(path.join(a.poolDir, ".system"), { recursive: true });
+    const snap = await run(a.snapshot());
+    expect([...snap.active]).toEqual(["qa"]);
+    expect([...snap.pool]).toEqual([]);
+  });
+
   it("apply moves a skill from source to dest via rename", async () => {
     const a = mkAdapter();
     await fs.mkdir(path.join(a.poolDir, "qa"), { recursive: true });

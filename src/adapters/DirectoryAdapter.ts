@@ -12,7 +12,12 @@ import type { PlannedMove } from "../state/schema.js";
 const listDirs = async (dir: string): Promise<string[]> => {
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
-    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+    // Skip hidden dirs (e.g. Codex's `.system/` of bundled skills). Loadout
+    // only manages user-facing skills, which never start with a dot. Treating
+    // a harness-internal dir as a skill produces destructive swap plans.
+    return entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => e.name);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw err;
