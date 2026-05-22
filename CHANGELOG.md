@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## 0.3.0 - 2026-05-22
+
 ### Added
 - Mode instruction files: each mode can now bundle a per-harness CLAUDE.md / AGENTS.md alongside its skills. Activating a mode materializes the right file at the harness's canonical path; the last active mode with an MD wins.
 - `loadout md-show <mode> <harness>`, `loadout md-set <mode> <harness> <path>`, `loadout md-unset <mode> <harness>` to author mode MDs from the CLI.
@@ -14,7 +17,6 @@
 - `HarnessAdapter` gained `instructionFilePath`, `readInstructionFile`, and `writeInstructionFile`. Claude uses `~/.claude/CLAUDE.md`, Codex uses `~/.codex/AGENTS.md`, shared `agents` has no convention and returns `null`.
 - Writes to instruction files are atomic (tmp + rename, with EXDEV fallback) so a crash mid-write can't leave a half-written CLAUDE.md.
 - Swap reports now include `mdNotices`; the CLI prints a one-line "restart your harness session" hint when a harness's instruction file changes.
-
 ## 0.2.3 - 2026-05-21
 
 ### Added
