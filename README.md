@@ -21,6 +21,7 @@ You've installed more skills than your agent can use. `~/.claude/skills/` is ful
 ~/.codex/skills/            ← Codex active set
 ~/.agents/skills/           ← shared agents active set
 ~/.loadout/pool/<harness>/  ← pool: installed but hidden
+~/.loadout/mds/<mode>/      ← per-mode CLAUDE.md / AGENTS.md (optional)
 ~/.loadout/modes.yaml       ← named subsets ("product", "design", ...)
 ~/.loadout/state.json       ← which modes are active right now
 ```
@@ -100,6 +101,27 @@ loadout sync  research     # ...or into a specific mode
 loadout delete throwaway
 ```
 
+### Mode instruction files (CLAUDE.md / AGENTS.md)
+
+A mode can bundle a per-harness instruction file alongside its skills. When you activate a mode, loadout materializes the right CLAUDE.md / AGENTS.md at the harness's canonical path — so switching modes flips both the visible skills *and* the harness's standing instructions in one move.
+
+```sh
+# Author a mode's MDs from existing files
+loadout md-set coding claude ./CLAUDE.coding.md
+loadout md-set coding codex  ./AGENTS.coding.md
+
+# Or capture whatever's currently live as the mode's MD
+loadout use coding
+# ...hand-edit ~/.claude/CLAUDE.md until it's right...
+loadout save coding --md           # snapshots the live MDs into the mode
+
+# Inspect / remove
+loadout md-show  coding claude
+loadout md-unset coding claude
+```
+
+Resolution is **last-applied-wins**: walking `active_modes` from last to first, the first mode that supplies an MD for a given harness wins. If no active mode supplies one, loadout restores the `baseline` snapshot it took on `loadout init`. Claude reads `~/.claude/CLAUDE.md`, Codex reads `~/.codex/AGENTS.md`; the shared `agents` harness has no instruction-file convention and is skipped. After a swap, loadout prints a one-line hint reminding you to restart the harness session if its instruction file changed.
+
 ### Task presets
 
 ```sh
@@ -149,6 +171,8 @@ loadout use product --rollback   # revert the in-progress op
 | `stale-lock` — orphaned lock from a crashed process | warn | ✓ clears it |
 | `unknown-skill` — mode references a skill not installed anywhere | warn | manual |
 | `orphan-pool-skill` — pool has a skill no mode references | warn | manual |
+| `md-drift` — live instruction file disagrees with the recorded sha (hand-edited since last swap) | warn | manual |
+| `missing-mode-md` — `state.live_mds` points to a mode MD that's no longer on disk | warn | manual |
 
 `doctor` exits with code = remaining-issue-count, so it's CI-friendly.
 

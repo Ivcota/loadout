@@ -5,7 +5,7 @@ description: Manage the user's installed AI skills with the `loadout` CLI — sw
 
 # loadout
 
-`loadout` is a CLI installed on this machine. It keeps every AI skill installed but only shows a chosen subset to the harness. A *mode* is a named subset of skill folder names. Activating a mode moves its skills from a *pool* into the *active* dir; deactivating moves them back. All swaps are atomic, lockfile-guarded, and resume-on-interrupt.
+`loadout` is a CLI installed on this machine. It keeps every AI skill installed but only shows a chosen subset to the harness. A *mode* is a named subset of skill folder names, and optionally a per-harness instruction file (`CLAUDE.md` / `AGENTS.md`). Activating a mode moves its skills from a *pool* into the *active* dir and materializes its instruction file at the harness's canonical path; deactivating moves skills back. All swaps are atomic, lockfile-guarded, and resume-on-interrupt.
 
 You manage this for the user by running `loadout` commands through the shell tool. **Never edit `~/.loadout/modes.yaml` or `~/.loadout/state.json` directly** — always go through the CLI so the lockfile, in-progress block, and crash-safe swap planner stay correct.
 
@@ -16,6 +16,7 @@ You manage this for the user by running `loadout` commands through the shell too
 - User says "I have too many skills" or the harness is dropping skills → propose modes that group their work, then `loadout new <mode>` + `loadout add <mode> <skill>` or `loadout edit <mode>` to populate.
 - User experiments with someone else's skill pack ("try gstack", "load this dotfile pack") → suggest `loadout save mine` first to snapshot, then install the pack, then `loadout save theirs`. Now `loadout use mine` / `loadout use theirs` flip between them.
 - Something looks wrong (skills missing, half-applied swap, "no such mode") → start with `loadout doctor`. If it reports issues, `loadout doctor --fix --dry-run` previews the repair; `loadout doctor --fix` applies it.
+- User wants a mode to also carry harness instructions (a CLAUDE.md or AGENTS.md that should be installed alongside its skills) → `loadout md-set <mode> <harness> <path>`. Or have them tune the live file by hand, then `loadout save <mode> --md` to snapshot it.
 
 Default to `--dry-run` for any destructive op the first time, then apply.
 
@@ -49,7 +50,20 @@ All three accept `--dry-run` (preview moves, change nothing) and `--rollback` (r
 | `loadout rm <mode> <skill>` | Remove a skill name from a mode. |
 | `loadout sync <mode>` | Add every currently-installed skill (active + pool) to a mode. |
 | `loadout edit <mode>` | Open an interactive Ink checkbox TUI. **Don't run this for the user** — it needs a real terminal. Tell them to run it themselves. |
-| `loadout save <mode>` | Snapshot whatever is currently active across harnesses into `<mode>`. `--force` overwrites. |
+| `loadout save <mode>` | Snapshot whatever is currently active across harnesses into `<mode>`. `--force` overwrites. Pass `--md` to also snapshot each harness's live instruction file into the mode. |
+
+### Mode instruction files (CLAUDE.md / AGENTS.md)
+
+A mode can bundle a per-harness instruction file (Claude reads `~/.claude/CLAUDE.md`, Codex reads `~/.codex/AGENTS.md`; shared `agents` has no convention and is skipped). When the user activates a mode, loadout writes that mode's MD to the harness's canonical path. Resolution across stacked modes is **last-applied-wins**: the last mode in `active_modes` that supplies an MD for a given harness wins. If none do, loadout restores the `baseline` MD snapshotted at `loadout init`.
+
+| Command | Effect |
+|---|---|
+| `loadout md-show <mode> <harness>` | Print a mode's stored MD for a harness. |
+| `loadout md-set <mode> <harness> <path>` | Store the contents of `<path>` as the mode's MD for that harness. Creates or overwrites. |
+| `loadout md-unset <mode> <harness>` | Remove a mode's stored MD for a harness. |
+| `loadout save <mode> --md` | Snapshot whatever is currently live at each harness's instruction-file path into the mode. |
+
+After a swap, loadout prints a one-line "restart your harness session" hint if the instruction file changed — relay that to the user, since the running session won't pick up the new MD until restart.
 
 ### Recovery
 
@@ -80,6 +94,15 @@ loadout status
 **"Save what I have right now as 'deep-work'."**
 ```
 loadout save deep-work
+# include the live CLAUDE.md/AGENTS.md too:
+loadout save deep-work --md
+```
+
+**"Give 'coding' mode its own CLAUDE.md."**
+```
+loadout md-set coding claude ./CLAUDE.coding.md
+# or, after hand-tuning the live file:
+loadout save coding --md
 ```
 
 **"I think a skill is missing."**
@@ -100,6 +123,7 @@ loadout restore-all              # apply
 - Cross-filesystem moves automatically fall back to copy-then-delete. No action needed.
 - The `loadout` skill itself (this file) is reserved — it's hidden from every mode and never enters the pool. You can't accidentally swap it out from under yourself. It's removed by `loadout uninstall`.
 - Claude Code (`~/.claude/skills/`), Codex (`~/.codex/skills/`), and shared agents (`~/.agents/skills/`) are managed separately. A mode's skill list applies to whichever harness has that skill installed.
+- Instruction files only update on the next swap. If the user hand-edits `~/.claude/CLAUDE.md` and then runs `loadout doctor`, expect a `md-drift` warning — that's working as intended. Resolve by either `loadout save <active-mode> --md` (keep the edits) or re-activating the mode (discard them).
 
 ## Don't
 

@@ -31,6 +31,8 @@ import {
   save as saveState,
 } from "../../state/manager.js";
 import { initialState, type State } from "../../state/schema.js";
+import { adoptBaseline, type AdoptBaselineReport } from "./mds.js";
+import type { MdsIOError } from "../../mds/storage.js";
 
 export interface InitInput {
   readonly paths: LoadoutHome;
@@ -51,6 +53,7 @@ export interface InitReport {
     readonly skill: string;
     readonly path: string;
   }>;
+  readonly baseline: AdoptBaselineReport;
 }
 
 export type InitError =
@@ -58,6 +61,7 @@ export type InitError =
   | ManifestIOError
   | ManifestParseError
   | ManifestVersionError
+  | MdsIOError
   | StateIOError
   | StateParseError
   | StateVersionError;
@@ -135,6 +139,13 @@ const runInit = (input: InitInput): Effect.Effect<InitReport, InitError> =>
       stateOut = existingState;
     }
 
+    // Adopt the existing instruction file for each harness as the baseline.
+    // Non-destructive (refuses to overwrite) so re-running init is safe.
+    const baseline = yield* adoptBaseline({
+      paths: input.paths,
+      adapters: input.adapters,
+    });
+
     return {
       manifestWritten,
       stateWritten,
@@ -142,6 +153,7 @@ const runInit = (input: InitInput): Effect.Effect<InitReport, InitError> =>
       state: stateOut,
       discovered,
       reservedInstalled,
+      baseline,
     };
   });
 

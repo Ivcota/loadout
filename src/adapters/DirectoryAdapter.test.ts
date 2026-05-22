@@ -141,4 +141,129 @@ describe("DirectoryAdapter", () => {
     const back = a.invert(inv);
     expect(back).toEqual(m);
   });
+
+  describe("instruction file", () => {
+    const mkWithFile = (filePath?: string): DirectoryAdapter =>
+      new DirectoryAdapter(
+        "claude",
+        path.join(tmp, "active"),
+        path.join(tmp, "pool"),
+        { instructionFilePath: filePath ?? path.join(tmp, "CLAUDE.md") },
+      );
+
+    it("defaults instructionFilePath to null when not provided", () => {
+      const a = new DirectoryAdapter(
+        "agents",
+        path.join(tmp, "active"),
+        path.join(tmp, "pool"),
+      );
+      expect(a.instructionFilePath).toBeNull();
+    });
+
+    it("readInstructionFile returns null when the file is absent", async () => {
+      const a = mkWithFile();
+      const result = await run(a.readInstructionFile());
+      expect(result).toBeNull();
+    });
+
+    it("readInstructionFile returns the content when the file exists", async () => {
+      const a = mkWithFile();
+      await fs.writeFile(a.instructionFilePath as string, "# hello\n");
+      const result = await run(a.readInstructionFile());
+      expect(result).toBe("# hello\n");
+    });
+
+    it("writeInstructionFile creates the file with the given content", async () => {
+      const a = mkWithFile();
+      await run(a.writeInstructionFile("# fresh\n"));
+      const content = await fs.readFile(a.instructionFilePath as string, "utf8");
+      expect(content).toBe("# fresh\n");
+    });
+
+    it("writeInstructionFile overwrites existing content", async () => {
+      const a = mkWithFile();
+      await fs.writeFile(a.instructionFilePath as string, "# old\n");
+      await run(a.writeInstructionFile("# new\n"));
+      const content = await fs.readFile(a.instructionFilePath as string, "utf8");
+      expect(content).toBe("# new\n");
+    });
+
+    it("writeInstructionFile creates parent directories that don't exist yet", async () => {
+      const nested = path.join(tmp, "nested", "deep", "CLAUDE.md");
+      const a = mkWithFile(nested);
+      await run(a.writeInstructionFile("# nested\n"));
+      const content = await fs.readFile(nested, "utf8");
+      expect(content).toBe("# nested\n");
+    });
+
+    it("writeInstructionFile leaves no temp file behind when rename succeeds", async () => {
+      const a = mkWithFile();
+      await run(a.writeInstructionFile("# ok\n"));
+      const parent = path.dirname(a.instructionFilePath as string);
+      const entries = await fs.readdir(parent);
+      const stragglers = entries.filter((e) => e.includes("loadout-tmp"));
+      expect(stragglers).toEqual([]);
+    });
+
+    it("writeInstructionFile cleans up its tmp file when rename fails", async () => {
+      const renameFn = async () => {
+        const e = new Error("simulated") as NodeJS.ErrnoException;
+        e.code = "EACCES";
+        throw e;
+      };
+      const filePath = path.join(tmp, "CLAUDE.md");
+      const a = new DirectoryAdapter(
+        "claude",
+        path.join(tmp, "active"),
+        path.join(tmp, "pool"),
+        { instructionFilePath: filePath, renameFn },
+      );
+      const exit = await runExit(a.writeInstructionFile("# x\n"));
+      expect(exit._tag).toBe("Failure");
+      const entries = await fs.readdir(tmp);
+      const stragglers = entries.filter((e) => e.includes("loadout-tmp"));
+      expect(stragglers).toEqual([]);
+    });
+
+    it("writeInstructionFile falls back to fs-extra.move on EXDEV", async () => {
+      let calls = 0;
+      const renameFn = async () => {
+        calls += 1;
+        const e = new Error("xdev") as NodeJS.ErrnoException;
+        e.code = "EXDEV";
+        throw e;
+      };
+      const filePath = path.join(tmp, "CLAUDE.md");
+      const a = new DirectoryAdapter(
+        "claude",
+        path.join(tmp, "active"),
+        path.join(tmp, "pool"),
+        { instructionFilePath: filePath, renameFn },
+      );
+      await run(a.writeInstructionFile("# xdev-ok\n"));
+      expect(calls).toBeGreaterThan(0);
+      const content = await fs.readFile(filePath, "utf8");
+      expect(content).toBe("# xdev-ok\n");
+    });
+
+    it("readInstructionFile fails on a null-path adapter", async () => {
+      const a = new DirectoryAdapter(
+        "agents",
+        path.join(tmp, "active"),
+        path.join(tmp, "pool"),
+      );
+      const exit = await runExit(a.readInstructionFile());
+      expect(exit._tag).toBe("Failure");
+    });
+
+    it("writeInstructionFile fails on a null-path adapter", async () => {
+      const a = new DirectoryAdapter(
+        "agents",
+        path.join(tmp, "active"),
+        path.join(tmp, "pool"),
+      );
+      const exit = await runExit(a.writeInstructionFile("# nope\n"));
+      expect(exit._tag).toBe("Failure");
+    });
+  });
 });

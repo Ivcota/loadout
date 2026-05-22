@@ -13,6 +13,7 @@ import {
   save as saveManifest,
 } from "../../manifest/loader.js";
 import type { ModesManifest } from "../../manifest/schema.js";
+import type { MdsIOError } from "../../mds/storage.js";
 import type { LoadoutHome } from "../../paths.js";
 import type {
   StateIOError,
@@ -20,6 +21,10 @@ import type {
   StateVersionError,
 } from "../../state/errors.js";
 import { acquireLock } from "../../state/manager.js";
+import {
+  captureLiveMdsForMode,
+  type CaptureLiveMdsReport,
+} from "./mds.js";
 
 export interface SaveModeExists {
   readonly _tag: "SaveModeExists";
@@ -35,6 +40,7 @@ export type SaveError =
   | ManifestIOError
   | ManifestParseError
   | ManifestVersionError
+  | MdsIOError
   | StateIOError
   | StateParseError
   | StateVersionError
@@ -46,6 +52,9 @@ export interface SaveInput {
   readonly adapters: ReadonlyArray<HarnessAdapter>;
   readonly mode: string;
   readonly force?: boolean;
+  // When true, also snapshot the currently-live instruction file for each
+  // harness into the mode's MD slot. Mirrors the skills-snapshot behavior.
+  readonly md?: boolean;
 }
 
 export interface SaveReport {
@@ -58,6 +67,7 @@ export interface SaveReport {
   }>;
   readonly before: ModesManifest;
   readonly after: ModesManifest;
+  readonly md: CaptureLiveMdsReport | null;
 }
 
 const runSave = (input: SaveInput): Effect.Effect<SaveReport, SaveError> =>
@@ -92,6 +102,15 @@ const runSave = (input: SaveInput): Effect.Effect<SaveReport, SaveError> =>
       modes: { ...before.modes, [input.mode]: { skills } },
     };
     yield* saveManifest(input.paths.manifest, after);
+
+    const mdReport = input.md
+      ? yield* captureLiveMdsForMode({
+          paths: input.paths,
+          adapters: input.adapters,
+          mode: input.mode,
+        })
+      : null;
+
     return {
       mode: input.mode,
       skills,
@@ -99,6 +118,7 @@ const runSave = (input: SaveInput): Effect.Effect<SaveReport, SaveError> =>
       perHarness,
       before,
       after,
+      md: mdReport,
     } satisfies SaveReport;
   });
 
@@ -115,6 +135,14 @@ export const renderSave = (r: SaveReport): string => {
   lines.push(`${verb} mode '${r.mode}' (${r.skills.length} skill(s))`);
   for (const h of r.perHarness) {
     lines.push(`  · ${h.harness}: ${h.count} active`);
+  }
+  if (r.md) {
+    for (const c of r.md.captured) {
+      lines.push(`  ✓ captured ${c.harness} instruction file (${c.bytes} bytes)`);
+    }
+    for (const s of r.md.skipped) {
+      lines.push(`  · skipped ${s.harness} MD: ${s.reason}`);
+    }
   }
   lines.push(`activate with: loadout use ${r.mode}`);
   return lines.join("\n");

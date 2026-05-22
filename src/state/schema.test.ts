@@ -67,6 +67,40 @@ describe("state schema", () => {
     ).toThrow();
   });
 
+  it("treats live_mds as undefined when absent (callers use liveMdsOf)", () => {
+    const decoded = decodeStateSync({
+      version: 1,
+      active_modes: [],
+      in_progress: null,
+    });
+    expect(decoded.live_mds).toBeUndefined();
+  });
+
+  it("decodes a state with live_mds entries", () => {
+    const decoded = decodeStateSync({
+      version: 1,
+      active_modes: ["coding"],
+      in_progress: null,
+      live_mds: {
+        claude: { mode: "coding", sha256: "abc123" },
+        codex: { mode: "baseline", sha256: "def456" },
+      },
+    });
+    expect(decoded.live_mds?.claude?.mode).toBe("coding");
+    expect(decoded.live_mds?.codex?.sha256).toBe("def456");
+  });
+
+  it("rejects a live_mds entry missing mode or sha256", () => {
+    expect(() =>
+      decodeStateSync({
+        version: 1,
+        active_modes: [],
+        in_progress: null,
+        live_mds: { claude: { mode: "coding" } },
+      }),
+    ).toThrow();
+  });
+
   it("rejects a PlannedMove with unknown op", () => {
     expect(() =>
       decodeStateSync({

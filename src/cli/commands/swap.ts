@@ -10,13 +10,18 @@ import type {
 } from "../../manifest/errors.js";
 import { load as loadManifest } from "../../manifest/loader.js";
 import type { ModesManifest } from "../../manifest/schema.js";
+import {
+  materializeInstructionFiles,
+  type MaterializeNotice,
+} from "../../mds/materialize.js";
+import type { MdsIOError } from "../../mds/storage.js";
 import type { LoadoutHome } from "../../paths.js";
 import type {
   StateIOError,
   StateParseError,
   StateVersionError,
 } from "../../state/errors.js";
-import { acquireLock, load as loadState } from "../../state/manager.js";
+import { acquireLock, load as loadState, save as saveState } from "../../state/manager.js";
 import type { PlannedMove, State } from "../../state/schema.js";
 import {
   execute,
@@ -41,6 +46,7 @@ export type SwapError =
   | ManifestIOError
   | ManifestParseError
   | ManifestVersionError
+  | MdsIOError
   | StateIOError
   | StateParseError
   | StateVersionError
@@ -66,6 +72,7 @@ export interface SwapReport {
   readonly before: State;
   readonly after: State;
   readonly manifest: ModesManifest;
+  readonly mdNotices: ReadonlyArray<MaterializeNotice>;
 }
 
 const runSwap = (input: SwapInput): Effect.Effect<SwapReport, SwapError> =>
@@ -82,12 +89,18 @@ const runSwap = (input: SwapInput): Effect.Effect<SwapReport, SwapError> =>
           _tag: "SwapNothingToRollback" as const,
         } satisfies SwapNothingToRollback);
       }
-      const after = yield* rollback(before, {
+      const afterRollback = yield* rollback(before, {
         paths: input.paths.state,
         adapters: input.adapters,
         dryRun,
       });
       const manifestForReport = yield* loadManifest(input.paths.manifest);
+      const { state: after, notices: mdNotices } = yield* applyMaterialize(
+        afterRollback,
+        input.adapters,
+        input.paths,
+        dryRun,
+      );
       return {
         op: before.in_progress.op,
         mode: before.in_progress.mode,
@@ -98,6 +111,7 @@ const runSwap = (input: SwapInput): Effect.Effect<SwapReport, SwapError> =>
         before,
         after,
         manifest: manifestForReport,
+        mdNotices,
       } satisfies SwapReport;
     }
 
@@ -133,11 +147,18 @@ const runSwap = (input: SwapInput): Effect.Effect<SwapReport, SwapError> =>
       harnesses,
     });
 
-    const after = yield* execute(resumed, input.op, input.mode, result, {
+    const afterSkills = yield* execute(resumed, input.op, input.mode, result, {
       paths: input.paths.state,
       adapters: input.adapters,
       dryRun,
     });
+
+    const { state: after, notices: mdNotices } = yield* applyMaterialize(
+      afterSkills,
+      input.adapters,
+      input.paths,
+      dryRun,
+    );
 
     return {
       op: input.op,
@@ -149,7 +170,29 @@ const runSwap = (input: SwapInput): Effect.Effect<SwapReport, SwapError> =>
       before,
       after,
       manifest,
+      mdNotices,
     } satisfies SwapReport;
+  });
+
+const applyMaterialize = (
+  state: State,
+  adapters: ReadonlyArray<HarnessAdapter>,
+  paths: LoadoutHome,
+  dryRun: boolean,
+): Effect.Effect<
+  { state: State; notices: ReadonlyArray<MaterializeNotice> },
+  AdapterError | MdsIOError | StateIOError | StateParseError
+> =>
+  Effect.gen(function* () {
+    if (dryRun) return { state, notices: [] };
+    const result = yield* materializeInstructionFiles(
+      adapters,
+      state,
+      paths.root,
+    );
+    const next: State = { ...state, live_mds: result.newLiveMds };
+    yield* saveState(paths.state, next);
+    return { state: next, notices: result.notices };
   });
 
 const withLock = (input: SwapInput): Effect.Effect<SwapReport, SwapError> =>
@@ -203,6 +246,12 @@ export const renderSwap = (r: SwapReport): string => {
   lines.push(
     `active_modes: ${r.after.active_modes.length === 0 ? "(none)" : r.after.active_modes.join(", ")}`,
   );
+
+  for (const n of r.mdNotices) {
+    lines.push(
+      `note: ${n.harness} instruction file changed (now ${n.mode}) — restart your harness session to load it.`,
+    );
+  }
 
   if (r.dryRun) {
     lines.push(`(dry-run: no files moved, state.json unchanged)`);

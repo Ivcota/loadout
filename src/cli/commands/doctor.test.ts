@@ -211,6 +211,56 @@ describe("doctor", () => {
       ["orphan-pool-skill", "unknown-active-mode", "unknown-skill"].sort(),
     );
   });
+
+  it("reports md-drift when the live instruction file disagrees with the recorded sha", async () => {
+    await seedActive(tmpHome, "claude", ["qa"]);
+    const deps = mkDeps();
+    await run(init(deps));
+
+    // Materialize an MD by activating a mode that has one — emulated here by
+    // writing the live file + recording state.live_mds with a stale sha.
+    await fs.writeFile(path.join(tmpHome, ".claude/CLAUDE.md"), "# v2 hand-edited\n");
+    await run(saveState(deps.paths.state, {
+      version: 1,
+      active_modes: ["default"],
+      in_progress: null,
+      live_mds: {
+        claude: { mode: "coding", sha256: "stale-recorded-hash" },
+      },
+    }));
+    // Also have a stored mode MD so missing-mode-md doesn't fire too.
+    await fs.mkdir(path.join(tmpHome, ".loadout/mds/coding"), { recursive: true });
+    await fs.writeFile(
+      path.join(tmpHome, ".loadout/mds/coding/claude.md"),
+      "# v1\n",
+    );
+
+    const report = await run(doctor(deps));
+    expect(kinds(report.issues)).toContain("md-drift");
+    const drift = report.issues.find((i) => i.kind === "md-drift");
+    expect(drift && "harness" in drift ? drift.harness : null).toBe("claude");
+  });
+
+  it("reports missing-mode-md when live_mds points to a non-existent stored MD", async () => {
+    await seedActive(tmpHome, "claude", ["qa"]);
+    const deps = mkDeps();
+    await run(init(deps));
+
+    const liveContent = "# whatever\n";
+    await fs.writeFile(path.join(tmpHome, ".claude/CLAUDE.md"), liveContent);
+    const { sha256 } = await import("../../mds/drift.js");
+    await run(saveState(deps.paths.state, {
+      version: 1,
+      active_modes: ["default"],
+      in_progress: null,
+      live_mds: {
+        claude: { mode: "phantom-mode", sha256: sha256(liveContent) },
+      },
+    }));
+
+    const report = await run(doctor(deps));
+    expect(kinds(report.issues)).toContain("missing-mode-md");
+  });
 });
 
 describe("renderDoctor", () => {

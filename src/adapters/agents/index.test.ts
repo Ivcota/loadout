@@ -56,4 +56,15 @@ describe("AgentsAdapter", () => {
     expect([...snap.pool]).toEqual(["noah-kagan"]);
     expect(snap.name).toBe("agents");
   });
+
+  it("has no instruction file (agents harness lacks one)", () => {
+    const a = createAgentsAdapter({ home: tmpHome });
+    expect(a.instructionFilePath).toBeNull();
+  });
+
+  it("readInstructionFile fails because agents has no instruction file", async () => {
+    const a = createAgentsAdapter({ home: tmpHome });
+    const result = await Effect.runPromise(Effect.either(a.readInstructionFile()));
+    expect(result._tag).toBe("Left");
+  });
 });

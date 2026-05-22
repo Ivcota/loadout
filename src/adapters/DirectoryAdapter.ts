@@ -44,10 +44,12 @@ const causeOf = (err: unknown): AdapterError["cause"] => {
 
 export interface DirectoryAdapterOptions {
   readonly renameFn?: (src: string, dest: string) => Promise<void>;
+  readonly instructionFilePath?: string | null;
 }
 
 export class DirectoryAdapter implements HarnessAdapter {
   private readonly renameFn: (src: string, dest: string) => Promise<void>;
+  public readonly instructionFilePath: string | null;
 
   constructor(
     public readonly name: string,
@@ -56,6 +58,7 @@ export class DirectoryAdapter implements HarnessAdapter {
     opts: DirectoryAdapterOptions = {},
   ) {
     this.renameFn = opts.renameFn ?? fs.rename;
+    this.instructionFilePath = opts.instructionFilePath ?? null;
   }
 
   snapshot(): Effect.Effect<HarnessSnapshot, AdapterError> {
@@ -121,5 +124,80 @@ export class DirectoryAdapter implements HarnessAdapter {
       source_path: move.dest_path,
       dest_path: move.source_path,
     };
+  }
+
+  readInstructionFile(): Effect.Effect<string | null, AdapterError> {
+    const filePath = this.instructionFilePath;
+    if (filePath === null) {
+      return Effect.fail(
+        new AdapterError({
+          harness: this.name,
+          skill: "*",
+          op: "activate",
+          cause: "ENOENT",
+          message: `harness ${this.name} has no instruction file`,
+        }),
+      );
+    }
+    return Effect.tryPromise({
+      try: async () => {
+        try {
+          return await fs.readFile(filePath, "utf8");
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+          throw err;
+        }
+      },
+      catch: (cause) =>
+        new AdapterError({
+          harness: this.name,
+          skill: "*",
+          op: "activate",
+          cause: causeOf(cause),
+          message: `failed to read instruction file for ${this.name}: ${String(cause)}`,
+          source: cause,
+        }),
+    });
+  }
+
+  writeInstructionFile(content: string): Effect.Effect<void, AdapterError> {
+    const filePath = this.instructionFilePath;
+    if (filePath === null) {
+      return Effect.fail(
+        new AdapterError({
+          harness: this.name,
+          skill: "*",
+          op: "activate",
+          cause: "ENOENT",
+          message: `harness ${this.name} has no instruction file`,
+        }),
+      );
+    }
+    return Effect.tryPromise({
+      try: async () => {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        const tmp = `${filePath}.loadout-tmp-${process.pid}-${Date.now()}`;
+        await fs.writeFile(tmp, content, "utf8");
+        try {
+          await this.renameFn(tmp, filePath);
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === "EXDEV") {
+            await fsExtra.move(tmp, filePath, { overwrite: true });
+          } else {
+            await fs.rm(tmp, { force: true });
+            throw err;
+          }
+        }
+      },
+      catch: (cause) =>
+        new AdapterError({
+          harness: this.name,
+          skill: "*",
+          op: "activate",
+          cause: causeOf(cause),
+          message: `failed to write instruction file for ${this.name}: ${String(cause)}`,
+          source: cause,
+        }),
+    });
   }
 }

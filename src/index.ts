@@ -35,3 +35,6 @@ export * from "./state/schema.js";
 export * as ManifestLoader from "./manifest/loader.js";
 export * as StateManager from "./state/manager.js";
 export * as SwapEngine from "./swap/engine.js";
+export * as MdsStorage from "./mds/storage.js";
+export * as MdsDrift from "./mds/drift.js";
+export * as MdsMaterialize from "./mds/materialize.js";

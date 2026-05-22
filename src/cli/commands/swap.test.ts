@@ -344,6 +344,58 @@ describe("swap commands (on/off/use)", () => {
     expect(report.moves).toHaveLength(0);
     expect(report.after.active_modes).toEqual(["default"]);
   });
+
+  it("materializes the active mode's claude instruction file and records live_mds", async () => {
+    await seedActive(tmpHome, "claude", ["qa"]);
+    const deps = mkDeps();
+    await run(init(deps));
+    await run(saveManifest(deps.paths.manifest, {
+      version: 1,
+      modes: {
+        default: { skills: ["qa"] },
+        coding: { skills: [] },
+      },
+    }));
+
+    // Author a claude MD for the coding mode.
+    const modeDir = path.join(tmpHome, ".loadout/mds/coding");
+    await fs.mkdir(modeDir, { recursive: true });
+    await fs.writeFile(path.join(modeDir, "claude.md"), "# coding rules\n");
+
+    const report = await run(on({ ...deps, mode: "coding" }));
+
+    expect(report.mdNotices).toHaveLength(1);
+    expect(report.mdNotices[0]).toMatchObject({
+      harness: "claude",
+      mode: "coding",
+    });
+    expect(report.after.live_mds?.claude?.mode).toBe("coding");
+
+    const live = await fs.readFile(
+      path.join(tmpHome, ".claude/CLAUDE.md"),
+      "utf8",
+    );
+    expect(live).toBe("# coding rules\n");
+  });
+
+  it("falls back to the baseline when no active mode supplies an MD", async () => {
+    await seedActive(tmpHome, "claude", ["qa"]);
+    const deps = mkDeps();
+    await run(init(deps));
+
+    const baselineDir = path.join(tmpHome, ".loadout/mds/baseline");
+    await fs.mkdir(baselineDir, { recursive: true });
+    await fs.writeFile(path.join(baselineDir, "claude.md"), "# baseline\n");
+
+    const report = await run(use({ ...deps, mode: "default" }));
+
+    expect(report.after.live_mds?.claude?.mode).toBe("baseline");
+    const live = await fs.readFile(
+      path.join(tmpHome, ".claude/CLAUDE.md"),
+      "utf8",
+    );
+    expect(live).toBe("# baseline\n");
+  });
 });
 
 describe("renderSwap", () => {
@@ -370,6 +422,7 @@ describe("renderSwap", () => {
         in_progress: null,
       },
       manifest: { version: 1, modes: {} },
+      mdNotices: [],
     });
     expect(out).toContain("loadout on product");
     expect(out).toContain("→ activate office-hours (claude)");
@@ -387,6 +440,7 @@ describe("renderSwap", () => {
       before: { version: 1, active_modes: [], in_progress: null },
       after: { version: 1, active_modes: ["default"], in_progress: null },
       manifest: { version: 1, modes: {} },
+      mdNotices: [],
     });
     expect(out.startsWith("[dry-run]")).toBe(true);
     expect(out).toContain("dry-run: no files moved");
@@ -411,6 +465,7 @@ describe("renderSwap", () => {
       before: { version: 1, active_modes: ["default"], in_progress: null },
       after: { version: 1, active_modes: ["default"], in_progress: null },
       manifest: { version: 1, modes: {} },
+      mdNotices: [],
     });
     expect(out).toContain("loadout --rollback (was: on product)");
     expect(out).toContain("revert activate office-hours");

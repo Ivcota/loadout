@@ -68,6 +68,31 @@ describe("StateManager", () => {
     expect(loaded.in_progress?.completed[0]).toEqual(move);
   });
 
+  it("load() reads a legacy state.json without live_mds", async () => {
+    const paths = pathsFor(tmp);
+    await fs.mkdir(paths.root, { recursive: true });
+    await fs.writeFile(
+      paths.stateFile,
+      JSON.stringify({ version: 1, active_modes: [], in_progress: null }),
+    );
+    const loaded = await run(load(paths));
+    expect(loaded.live_mds).toBeUndefined();
+  });
+
+  it("save() persists live_mds and load() round-trips it", async () => {
+    const paths = pathsFor(tmp);
+    await run(
+      save(paths, {
+        version: 1,
+        active_modes: ["coding"],
+        in_progress: null,
+        live_mds: { claude: { mode: "coding", sha256: "abc" } },
+      }),
+    );
+    const loaded = await run(load(paths));
+    expect(loaded.live_mds.claude).toEqual({ mode: "coding", sha256: "abc" });
+  });
+
   it("load() rejects corrupt JSON with StateParseError", async () => {
     const paths = pathsFor(tmp);
     await fs.mkdir(paths.root, { recursive: true });

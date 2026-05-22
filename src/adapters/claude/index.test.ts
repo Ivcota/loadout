@@ -7,6 +7,7 @@ import {
   CLAUDE_HARNESS_NAME,
   createClaudeAdapter,
   defaultClaudeActiveDir,
+  defaultClaudeInstructionFile,
   defaultClaudePoolDir,
 } from "./index.js";
 
@@ -25,6 +26,27 @@ describe("ClaudeAdapter", () => {
     const home = "/tmp/fake-home";
     expect(defaultClaudeActiveDir(home)).toBe("/tmp/fake-home/.claude/skills");
     expect(defaultClaudePoolDir(home)).toBe("/tmp/fake-home/.loadout/pool/claude");
+  });
+
+  it("instruction file defaults to ~/.claude/CLAUDE.md", () => {
+    expect(defaultClaudeInstructionFile("/tmp/fake-home")).toBe(
+      "/tmp/fake-home/.claude/CLAUDE.md",
+    );
+  });
+
+  it("exposes its instruction file path on the adapter", () => {
+    const a = createClaudeAdapter({ home: tmpHome });
+    expect(a.instructionFilePath).toBe(
+      path.join(tmpHome, ".claude", "CLAUDE.md"),
+    );
+  });
+
+  it("honors explicit instructionFilePath override", () => {
+    const a = createClaudeAdapter({
+      home: tmpHome,
+      instructionFilePath: "/custom/CLAUDE.md",
+    });
+    expect(a.instructionFilePath).toBe("/custom/CLAUDE.md");
   });
 
   it("uses harness name 'claude'", () => {

@@ -26,6 +26,14 @@ import {
   syncMode,
 } from "./commands/manifest.js";
 import { renderRestoreAll, restoreAll } from "./commands/restore-all.js";
+import {
+  renderMdSet,
+  renderMdShow,
+  renderMdUnset,
+  setMd,
+  showMd,
+  unsetMd,
+} from "./commands/mds.js";
 import { renderSave, save } from "./commands/save.js";
 import { renderStatus, status } from "./commands/status.js";
 import { off, on, renderSwap, use } from "./commands/swap.js";
@@ -231,6 +239,9 @@ const initCmd = Command.make("init", {}, () =>
         ? `  ✓ wrote ${paths.state.stateFile} (active_modes=${JSON.stringify(report.state.active_modes)})`
         : `  · ${paths.state.stateFile} already initialized — left untouched`,
     );
+    for (const a of report.baseline.adopted) {
+      lines.push(`  ✓ adopted ${a.harness} instruction file as baseline (${a.bytes} bytes)`);
+    }
     lines.push(`  no files moved.`);
     yield* Console.log(lines.join("\n"));
   }).pipe(failWith("loadout init")),
@@ -363,8 +374,9 @@ const saveCmd = Command.make(
   {
     mode: Args.text({ name: "mode" }),
     force: Options.boolean("force"),
+    md: Options.boolean("md"),
   },
-  ({ mode, force }) =>
+  ({ mode, force, md }) =>
     Effect.gen(function* () {
       const paths = loadoutHome();
       const report = yield* save({
@@ -372,12 +384,13 @@ const saveCmd = Command.make(
         adapters: allAdapters(),
         mode,
         force,
+        md,
       });
       yield* Console.log(renderSave(report));
     }).pipe(failWith("loadout save")),
 ).pipe(
   Command.withDescription(
-    "Snapshot the current active skill set across harnesses into <mode> in modes.yaml.",
+    "Snapshot the current active skill set into <mode>. Pass --md to also capture live instruction files.",
   ),
 );
 
@@ -393,6 +406,69 @@ const editCmd = Command.make(
 ).pipe(
   Command.withDescription(
     "Open an interactive checkbox UI for choosing which skills belong to a mode.",
+  ),
+);
+
+const mdShowCmd = Command.make(
+  "md-show",
+  {
+    mode: Args.text({ name: "mode" }),
+    harness: Args.text({ name: "harness" }),
+  },
+  ({ mode, harness }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* showMd({ paths, mode, harness });
+      yield* Console.log(renderMdShow(report));
+    }).pipe(failWith("loadout md-show")),
+).pipe(
+  Command.withDescription(
+    "Print the instruction file content stored for <mode> + <harness>.",
+  ),
+);
+
+const mdSetCmd = Command.make(
+  "md-set",
+  {
+    mode: Args.text({ name: "mode" }),
+    harness: Args.text({ name: "harness" }),
+    path: Args.file({ name: "path" }),
+  },
+  ({ mode, harness, path: filePath }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const content = yield* Effect.tryPromise({
+        try: () => import("node:fs/promises").then((m) => m.readFile(filePath, "utf8")),
+        catch: (cause) => ({
+          _tag: "MdSetReadError" as const,
+          path: filePath,
+          cause,
+        }),
+      });
+      const report = yield* setMd({ paths, mode, harness, content });
+      yield* Console.log(renderMdSet(report));
+    }).pipe(failWith("loadout md-set")),
+).pipe(
+  Command.withDescription(
+    "Set <mode>'s instruction file for <harness> to the contents of <path>.",
+  ),
+);
+
+const mdUnsetCmd = Command.make(
+  "md-unset",
+  {
+    mode: Args.text({ name: "mode" }),
+    harness: Args.text({ name: "harness" }),
+  },
+  ({ mode, harness }) =>
+    Effect.gen(function* () {
+      const paths = loadoutHome();
+      const report = yield* unsetMd({ paths, mode, harness });
+      yield* Console.log(renderMdUnset(report));
+    }).pipe(failWith("loadout md-unset")),
+).pipe(
+  Command.withDescription(
+    "Remove the stored instruction file for <mode> + <harness>.",
   ),
 );
 
@@ -522,6 +598,9 @@ const cli = Command.run(
       syncCmd,
       saveCmd,
       editCmd,
+      mdShowCmd,
+      mdSetCmd,
+      mdUnsetCmd,
       doctorCmd,
       restoreAllCmd,
       uninstallCmd,

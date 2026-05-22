@@ -120,7 +120,7 @@ export const execute = (
       // Dry-run never writes; empty plan still updates active_modes if it changed.
       if (deps.dryRun) return state;
       const next: State = {
-        version: 1,
+        ...state,
         active_modes: [...result.newActiveModes],
         in_progress: null,
       };
@@ -132,8 +132,7 @@ export const execute = (
 
     // Snapshot intent: write the full plan into state.in_progress BEFORE any move.
     const initial: State = {
-      version: 1,
-      active_modes: state.active_modes,
+      ...state,
       in_progress: {
         op,
         mode,
@@ -162,14 +161,13 @@ export const execute = (
       completed = [...completed, move];
       pending = pending.slice(1);
       yield* save(deps.paths, {
-        version: 1,
-        active_modes: state.active_modes,
+        ...state,
         in_progress: { op, mode, completed, pending },
       });
     }
 
     const final: State = {
-      version: 1,
+      ...state,
       active_modes: [...result.newActiveModes],
       in_progress: null,
     };
@@ -207,8 +205,7 @@ export const resume = (
       completed = [...completed, move];
       pending = pending.slice(1);
       yield* save(deps.paths, {
-        version: 1,
-        active_modes: state.active_modes,
+        ...state,
         in_progress: { op: ip.op, mode: ip.mode, completed, pending },
       });
     }
@@ -230,7 +227,7 @@ export const resume = (
     }
 
     const next: State = {
-      version: 1,
+      ...state,
       active_modes: [...finalActive],
       in_progress: null,
     };
@@ -267,15 +264,13 @@ export const rollback = (
       yield* adapter.apply(adapter.invert(move));
       completed = completed.slice(0, -1);
       yield* save(deps.paths, {
-        version: 1,
-        active_modes: state.active_modes,
+        ...state,
         in_progress: { op: ip.op, mode: ip.mode, completed, pending: ip.pending },
       });
     }
 
     const next: State = {
-      version: 1,
-      active_modes: state.active_modes,
+      ...state,
       in_progress: null,
     };
     yield* save(deps.paths, next);

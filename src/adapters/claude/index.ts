@@ -19,17 +19,23 @@ export const defaultClaudeActiveDir = (home: string = os.homedir()): string =>
 export const defaultClaudePoolDir = (home: string = os.homedir()): string =>
   path.join(home, ".loadout", "pool", CLAUDE_HARNESS_NAME);
 
+export const defaultClaudeInstructionFile = (
+  home: string = os.homedir(),
+): string => path.join(home, ".claude", "CLAUDE.md");
+
 export const createClaudeAdapter = (
   opts: ClaudeAdapterOptions = {},
 ): DirectoryAdapter => {
   const home = opts.home ?? os.homedir();
   const activeDir = opts.activeDir ?? defaultClaudeActiveDir(home);
   const poolDir = opts.poolDir ?? defaultClaudePoolDir(home);
+  const instructionFilePath =
+    opts.instructionFilePath !== undefined
+      ? opts.instructionFilePath
+      : defaultClaudeInstructionFile(home);
   const { renameFn } = opts;
-  return new DirectoryAdapter(
-    CLAUDE_HARNESS_NAME,
-    activeDir,
-    poolDir,
-    renameFn ? { renameFn } : {},
-  );
+  return new DirectoryAdapter(CLAUDE_HARNESS_NAME, activeDir, poolDir, {
+    instructionFilePath,
+    ...(renameFn ? { renameFn } : {}),
+  });
 };

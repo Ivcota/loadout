@@ -7,6 +7,7 @@ import {
   CODEX_HARNESS_NAME,
   createCodexAdapter,
   defaultCodexActiveDir,
+  defaultCodexInstructionFile,
   defaultCodexPoolDir,
 } from "./index.js";
 
@@ -25,6 +26,27 @@ describe("CodexAdapter", () => {
     const home = "/tmp/fake-home";
     expect(defaultCodexActiveDir(home)).toBe("/tmp/fake-home/.codex/skills");
     expect(defaultCodexPoolDir(home)).toBe("/tmp/fake-home/.loadout/pool/codex");
+  });
+
+  it("instruction file defaults to ~/.codex/AGENTS.md", () => {
+    expect(defaultCodexInstructionFile("/tmp/fake-home")).toBe(
+      "/tmp/fake-home/.codex/AGENTS.md",
+    );
+  });
+
+  it("exposes its instruction file path on the adapter", () => {
+    const a = createCodexAdapter({ home: tmpHome });
+    expect(a.instructionFilePath).toBe(
+      path.join(tmpHome, ".codex", "AGENTS.md"),
+    );
+  });
+
+  it("honors explicit instructionFilePath override", () => {
+    const a = createCodexAdapter({
+      home: tmpHome,
+      instructionFilePath: "/custom/AGENTS.md",
+    });
+    expect(a.instructionFilePath).toBe("/custom/AGENTS.md");
   });
 
   it("uses harness name 'codex'", () => {
