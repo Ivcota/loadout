@@ -134,4 +134,12 @@ describe("status command", () => {
     const report = await run(status(input));
     expect(renderStatus(report)).toContain("in_progress: none");
   });
+
+  it("renderStatus appends an update notice when provided", async () => {
+    const input = mkInput();
+    const report = await run(status(input));
+    expect(renderStatus(report, "update available: 0.3.1 → 0.3.2\n  npm install -g @ivcota/loadout")).toContain(
+      "update available: 0.3.1 → 0.3.2",
+    );
+  });
 });

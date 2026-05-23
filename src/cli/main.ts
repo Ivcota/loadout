@@ -8,6 +8,7 @@ import { createClaudeAdapter } from "../adapters/claude/index.js";
 import { createCodexAdapter } from "../adapters/codex/index.js";
 import { loadoutHome } from "../paths.js";
 import { VERSION } from "../index.js";
+import { checkForUpdate, renderUpdateNotice } from "../update/check.js";
 import {
   doctor,
   doctorFix,
@@ -255,7 +256,10 @@ const statusCmd = Command.make("status", {}, () =>
   Effect.gen(function* () {
     const paths = loadoutHome();
     const report = yield* status({ paths, adapters: allAdapters() });
-    yield* Console.log(renderStatus(report));
+    const updateNotice = yield* Effect.promise(() =>
+      checkForUpdate({ paths, currentVersion: VERSION }).then(renderUpdateNotice),
+    );
+    yield* Console.log(renderStatus(report, updateNotice));
   }).pipe(failWith("loadout status")),
 ).pipe(
   Command.withDescription(
