@@ -85,7 +85,7 @@ export const status = (
     };
   });
 
-export const renderStatus = (r: StatusReport): string => {
+export const renderStatus = (r: StatusReport, updateNotice?: string | null): string => {
   const lines: string[] = [];
   lines.push(`loadout — root: ${r.root}`);
   lines.push(
@@ -115,6 +115,10 @@ export const renderStatus = (r: StatusReport): string => {
     lines.push(
       `  ${h.name.padEnd(w)}  active: ${String(h.activeCount).padStart(3)}   pool: ${String(h.poolCount).padStart(3)}`,
     );
+  }
+  if (updateNotice) {
+    lines.push(``);
+    lines.push(updateNotice);
   }
   return lines.join("\n");
 };

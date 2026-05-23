@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+### Added
+- `loadout status` now checks npm for a newer published version and prints an `update available: <current> → <latest>` notice with the upgrade command when one exists. The check has a 1s timeout, caches the result for 24h in `update-check.json`, and fails silently when offline so it never slows down or breaks the command.
 
 ## 0.3.1 - 2026-05-22
 
