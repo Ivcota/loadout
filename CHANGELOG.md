@@ -2,9 +2,11 @@
 
 ## Unreleased
 
+
+## 0.4.1 - 2026-05-23
+
 ### Fixed
 - `npm run release` now creates an annotated tag so `git push --follow-tags` actually pushes it. Previously the script created a lightweight tag, which `--follow-tags` skips, so the tag never reached GitHub and `gh release create` failed at the end of every release.
-
 ## 0.4.0 - 2026-05-23
 
 ### Added
