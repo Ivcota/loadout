@@ -162,7 +162,7 @@ async function main(): Promise<void> {
     console.log(`- npm version ${bump} --no-git-tag-version`);
     console.log("- git add package.json package-lock.json CHANGELOG.md");
     console.log(`- git commit -m \"Release ${tag}\"`);
-    console.log(`- git tag ${tag}`);
+    console.log(`- git tag -a ${tag} -m \"Release ${tag}\"`);
     console.log("- git push --follow-tags");
     console.log("- npm publish --access public");
     console.log(`- gh release create ${tag} --title ${tag} --notes-file <release-notes>`);
@@ -179,7 +179,7 @@ async function main(): Promise<void> {
 
   run("git", ["add", "package.json", "package-lock.json", "CHANGELOG.md"]);
   run("git", ["commit", "-m", `Release ${tag}`]);
-  run("git", ["tag", tag]);
+  run("git", ["tag", "-a", tag, "-m", `Release ${tag}`]);
   run("git", ["push", "--follow-tags"]);
 
   await confirmPublish(nextVersion, releaseNotes);
