@@ -138,6 +138,37 @@ describe("doctor --fix", () => {
     expect(skippedKinds).toEqual(["orphan-pool-skill", "unknown-skill"]);
   });
 
+  it("does not auto-fix managed hook commands", async () => {
+    await seedActive(tmpHome, "claude", ["qa"]);
+    const deps = mkDeps();
+    await run(init(deps));
+    await fs.mkdir(path.join(tmpHome, ".codex"), { recursive: true });
+    await fs.writeFile(
+      path.join(tmpHome, ".codex/hooks.json"),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: path.join(
+                    tmpHome,
+                    ".claude/skills/gstack/bin/gstack-session-update",
+                  ),
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    const report = await run(doctorFix(deps));
+    expect(report.actions).toEqual([]);
+    expect(report.skipped.map((i) => i.kind)).toEqual(["managed-hook-command"]);
+  });
+
   it("dry-run reports planned actions without making changes", async () => {
     await seedActive(tmpHome, "claude", ["qa"]);
     await seedPool(tmpHome, "claude", ["review"]);

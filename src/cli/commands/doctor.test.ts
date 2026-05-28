@@ -142,6 +142,60 @@ describe("doctor", () => {
     }
   });
 
+  it("reports managed-hook-command when a Codex hook points into an active skill dir", async () => {
+    await seedActive(tmpHome, "claude", ["qa"]);
+    const deps = mkDeps();
+    await run(init(deps));
+    await fs.mkdir(path.join(tmpHome, ".codex"), { recursive: true });
+    await fs.writeFile(
+      path.join(tmpHome, ".codex/hooks.json"),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: path.join(
+                    tmpHome,
+                    ".claude/skills/gstack/bin/gstack-session-update",
+                  ),
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    const report = await run(doctor(deps));
+    const i = report.issues.find((x) => x.kind === "managed-hook-command");
+    expect(i).toBeDefined();
+    if (i && i.kind === "managed-hook-command") {
+      expect(i.harness).toBe("claude");
+      expect(i.skill).toBe("gstack");
+      expect(i.hookFile).toBe(path.join(tmpHome, ".codex/hooks.json"));
+    }
+  });
+
+  it("does NOT report managed-hook-command for hooks outside managed skill dirs", async () => {
+    await seedActive(tmpHome, "claude", ["qa"]);
+    const deps = mkDeps();
+    await run(init(deps));
+    await fs.mkdir(path.join(tmpHome, ".codex"), { recursive: true });
+    await fs.writeFile(
+      path.join(tmpHome, ".codex/hooks.json"),
+      JSON.stringify({
+        hooks: {
+          Stop: [{ hooks: [{ type: "command", command: "/usr/bin/true" }] }],
+        },
+      }),
+    );
+
+    const report = await run(doctor(deps));
+    expect(report.issues.find((x) => x.kind === "managed-hook-command")).toBeUndefined();
+  });
+
   it("reports stale-lock when a .lock directory exists with no live holder", async () => {
     const deps = mkDeps();
     await run(init(deps));
